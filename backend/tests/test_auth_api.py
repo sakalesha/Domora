@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -205,16 +206,17 @@ def test_current_user_rejects_missing_cookie_and_bearer_only(client):
 
 
 def test_current_user_rejects_expired_and_unknown_subject_cookies(client):
+    non_existent_user_id = str(uuid.uuid4())
     expired_token = jwt.encode(
         {
-            "sub": "19e7f610-7133-4f2e-b355-37878f670c7e",
+            "sub": non_existent_user_id,
             "iat": datetime.now(timezone.utc) - timedelta(days=2),
             "exp": datetime.now(timezone.utc) - timedelta(days=1),
         },
         security.SECRET_KEY,
         algorithm="HS256",
     )
-    unknown_user_token = create_access_token("19e7f610-7133-4f2e-b355-37878f670c7e")
+    unknown_user_token = create_access_token(non_existent_user_id)
     malformed_subject_token = create_access_token("not-a-uuid")
 
     for token in (expired_token, unknown_user_token, malformed_subject_token):
