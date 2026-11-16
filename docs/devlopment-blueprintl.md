@@ -113,16 +113,16 @@ Explain-back: Why a partial unique index instead of a plain one? Why integer pai
 **Objective:** users can sign up and log in, and every endpoint knows who is calling and what they may do.
 
 Tasks:
-- [ ] Choose a vetted password-hashing library; never invent your own. Understand salting and cost.
-- [ ] Resident signup requires a valid society invite code. Login returns a token. `/auth/me` returns the caller.
-- [ ] Create ONE reusable role check (a single dependency) used by every protected route. No role checks scattered in route bodies.
-- [ ] Ops and vendor accounts exist only via the seed script. No signup path can create ops.
-- [ ] Decide the error policy: 401 (not logged in or bad credentials), 403 (wrong role), 404 for other societies' resources so you do not leak their existence.
-- [ ] Token lifetime and whether the role is re-read from the database on each request (recommended: yes, so changes apply immediately).
+- [x] Choose a vetted password-hashing library; never invent your own. Understand salting and cost.
+- [x] Resident signup requires a valid society invite code. Login returns a token. `/auth/me` returns the caller.
+- [x] Create ONE reusable role-check dependency for role-restricted routes; `/auth/me` uses the shared current-user dependency, and future role-scoped routes must reuse this check.
+- [x] Ops and vendor accounts exist only via the seed script. No signup path can create ops.
+- [x] Decide the error policy: 401 (not logged in or bad credentials), 403 (wrong role), 404 for other societies' resources so you do not leak their existence.
+- [x] Token lifetime is one day; current account and role are re-read from the database on each protected request.
 
-Tests: wrong password gives 401; no token gives 401; resident calling an ops route gives 403; ops cannot be self-registered; wrong invite code rejected; duplicate username rejected; login timing does not reveal whether a username exists (optional but a good talking point).
+Tests: all auth cases above pass in `backend/tests` (42 passed, 0 failed), including generic invalid-credential responses, missing/invalid/expired tokens, role rejection, database role/active-state freshness, signup role escalation, wrong invite, and duplicate username/phone.
 Concepts to understand: JWT structure and why it is signed, not encrypted; stateless vs session auth; authentication vs authorization.
-Exit gate: the tests above pass and you can draw the request flow for a protected endpoint.
+Exit gate: implementation and test checks pass. Owner explain-back/review of the protected-request flow is still pending.
 Common traps: plaintext or fast-hash passwords; very long token lifetimes; trusting the client about the role.
 Explain-back: What does a JWT contain and who can read it? Why must authorization live on the backend even if the frontend hides buttons?
 
@@ -321,7 +321,7 @@ Pending (decide at the phase shown):
 | --- | --- | --- | --- | --- | --- |
 | 0 Foundations | Complete | 2026-11-15 | 2026-11-15 | No | Database connection verified; README, env template, and test-database decision recorded. |
 | 1 Data model | Complete | 2026-11-15 | 2026-11-15 | No | Postgres migration round-trip, constraints, RLS, and public API verified; digital ERD used instead of paper exercise. |
-| 2 Auth and roles | Not started | | | | |
+| 2 Auth and roles | Complete | 2026-11-16 | 2026-11-16 | No | Steps 1-4 and T001-T019 implemented; 42 tests passed and the Supabase development migration round-trip passed. Owner explain-back/review remains pending; phone unverified and no refresh/revocation flow in MVP. |
 | 3 Pricing and camp rules | Not started | | | | |
 | 4 Camp lifecycle and bookings | Not started | | | | |
 | 5 Vendor flow and photos | Not started | | | | |

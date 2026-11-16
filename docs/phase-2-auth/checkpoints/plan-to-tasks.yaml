@@ -1,0 +1,137 @@
+metadata:
+  generated: "2026-11-16"
+  source_plan: "docs/phase-2-auth/plan.md"
+  target_tasks: "docs/phase-2-auth/plan.md#implementation-steps"
+
+summary:
+  total_plan_items: 9
+  covered_plan_items: 9
+  missing_plan_items: 0
+  coverage_percentage: 100.0
+  total_tasks_generated: 19
+  orphan_tasks: 0
+
+phases:
+  - phase_id: "Phase-2"
+    phase_name: "Authentication and roles"
+    items:
+      - item_id: "1.1"
+        description: "Dependencies, user active-state migration, and auth configuration."
+        tasks:
+          - task_id: "T001"
+            description: "Add pinned auth/web dependencies."
+          - task_id: "T002"
+            description: "Add user active-state field and migration."
+          - task_id: "T003"
+            description: "Configure token expiry and production secret validation."
+        notes: ""
+      - item_id: "1.2"
+        description: "FastAPI application and API package foundation."
+        tasks:
+          - task_id: "T004"
+            description: "Create app factory/lifespan and health endpoint."
+          - task_id: "T005"
+            description: "Create API scaffolding and test DB override."
+        notes: ""
+      - item_id: "2.1"
+        description: "Password hashing and JWT security helpers."
+        tasks:
+          - task_id: "T006"
+            description: "Implement Argon2 and HS256 token helpers."
+        notes: ""
+      - item_id: "2.2"
+        description: "Resident signup service, schemas, and seed-only elevated accounts."
+        tasks:
+          - task_id: "T007"
+            description: "Define safe auth request/response schemas."
+          - task_id: "T008"
+            description: "Implement resident signup and credential service."
+          - task_id: "T009"
+            description: "Seed privileged accounts only from explicit environment configuration."
+        notes: ""
+      - item_id: "2.3"
+        description: "Public signup and login API."
+        tasks:
+          - task_id: "T010"
+            description: "Implement signup and login endpoints/status policy."
+          - task_id: "T011"
+            description: "Register auth routes and document phone limitation."
+        notes: ""
+      - item_id: "3.1"
+        description: "Database-backed authenticated identity."
+        tasks:
+          - task_id: "T012"
+            description: "Implement current-user bearer dependency."
+        notes: ""
+      - item_id: "3.2"
+        description: "Reusable role authorization."
+        tasks:
+          - task_id: "T013"
+            description: "Implement role requirement dependency."
+        notes: ""
+      - item_id: "3.3"
+        description: "Protected user profile endpoint."
+        tasks:
+          - task_id: "T014"
+            description: "Implement GET /auth/me."
+        notes: ""
+      - item_id: "4.1"
+        description: "Auth validation, documentation, and phase checkpoint evidence."
+        tasks:
+          - task_id: "T015"
+            description: "Test hashing and token validation."
+          - task_id: "T016"
+            description: "Test auth API scenarios and security failures."
+          - task_id: "T017"
+            description: "Test role/active-state freshness."
+          - task_id: "T018"
+            description: "Verify PostgreSQL migration and document results."
+          - task_id: "T019"
+            description: "Update decision log and phase blueprint."
+        notes: ""
+
+missing_plan_items: []
+orphan_tasks: []
+
+upstream_trace:
+  - plan_item: "1.1"
+    source_requirements: ["REQ-002", "REQ-003", "REQ-005"]
+    tasks: ["T001", "T002", "T003"]
+    full_trace: "REQ-002,REQ-003,REQ-005 -> Phase-2 item 1.1 -> T001,T002,T003"
+  - plan_item: "1.2"
+    source_requirements: ["REQ-003", "REQ-005"]
+    tasks: ["T004", "T005"]
+    full_trace: "REQ-003,REQ-005 -> Phase-2 item 1.2 -> T004,T005"
+  - plan_item: "2.1"
+    source_requirements: ["REQ-002", "REQ-005"]
+    tasks: ["T006"]
+    full_trace: "REQ-002,REQ-005 -> Phase-2 item 2.1 -> T006"
+  - plan_item: "2.2"
+    source_requirements: ["REQ-001", "REQ-004", "REQ-006"]
+    tasks: ["T007", "T008", "T009"]
+    full_trace: "REQ-001,REQ-004,REQ-006 -> Phase-2 item 2.2 -> T007,T008,T009"
+  - plan_item: "2.3"
+    source_requirements: ["REQ-001", "REQ-002", "REQ-004", "REQ-006"]
+    tasks: ["T010", "T011"]
+    full_trace: "REQ-001,REQ-002,REQ-004,REQ-006 -> Phase-2 item 2.3 -> T010,T011"
+  - plan_item: "3.1"
+    source_requirements: ["REQ-003", "REQ-005"]
+    tasks: ["T012"]
+    full_trace: "REQ-003,REQ-005 -> Phase-2 item 3.1 -> T012"
+  - plan_item: "3.2"
+    source_requirements: ["REQ-005"]
+    tasks: ["T013"]
+    full_trace: "REQ-005 -> Phase-2 item 3.2 -> T013"
+  - plan_item: "3.3"
+    source_requirements: ["REQ-003", "REQ-005"]
+    tasks: ["T014"]
+    full_trace: "REQ-003,REQ-005 -> Phase-2 item 3.3 -> T014"
+  - plan_item: "4.1"
+    source_requirements: ["REQ-001", "REQ-002", "REQ-003", "REQ-004", "REQ-005", "REQ-006"]
+    tasks: ["T015", "T016", "T017", "T018", "T019"]
+    full_trace: "REQ-001..REQ-006 -> Phase-2 item 4.1 -> T015,T016,T017,T018,T019"
+
+validation:
+  passed: true
+  errors: []
+  warnings: []

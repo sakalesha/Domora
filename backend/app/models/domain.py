@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     FetchedValue,
@@ -56,6 +57,12 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(150), nullable=False)
     phone: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False, default="resident")
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default=text("true"),
+        nullable=False,
+    )
     society_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), ForeignKey("societies.id"), nullable=True)
     unit_label: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
