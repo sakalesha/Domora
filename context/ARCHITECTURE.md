@@ -104,7 +104,7 @@ Errors: services raise typed business errors; one handler in the app turns them 
 | Table | Key columns | Constraints and notes |
 | --- | --- | --- |
 | societies | id, name, address, city, invite_code | invite_code unique |
-| users | id, username, password_hash, full_name, phone, role (resident, vendor, ops), society_id, unit_label, created_at | username and phone unique; residents require society and unit; phone unverified |
+| users | id, username, password_hash, full_name, phone, role (resident, vendor, ops), is_active, society_id, unit_label, created_at | username and phone unique; residents require society and unit; phone unverified; inactive users cannot authenticate |
 | services | id, code, name | Seeded: pest_control, ac_service |
 | camps | id, society_id, service_id, title, starts_at, ends_at, slot_minutes, min_participants, max_participants, join_deadline, base_price_paise, status, vendor_id, created_by, created_at, cancelled_reason | CHECKs: min at least 1; max at least min; starts_at before ends_at; join_deadline before starts_at; price not negative |
 | camp_price_tiers | camp_id, min_participants, discount_pct | Primary key (camp_id, min_participants); discount 0 to 100 |

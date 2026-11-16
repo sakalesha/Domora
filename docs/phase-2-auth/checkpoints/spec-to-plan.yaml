@@ -1,0 +1,126 @@
+metadata:
+  generated: "2026-11-16"
+  source_spec: "context/PRD.md#7.1"
+  target_plan: "docs/phase-2-auth/plan.md"
+
+summary:
+  total_requirements: 6
+  covered_requirements: 6
+  missing_requirements: 0
+  coverage_percentage: 100.0
+
+requirements:
+  - req_id: "REQ-001"
+    source_id: "FR-A1"
+    req_description: "Resident can sign up with required details and a valid society invite code."
+    priority: "MUST"
+    plan_mapping:
+      phase: "Phase-2"
+      phase_name: "Authentication and roles"
+      items:
+        - item_id: "1.1"
+          description: "Prepare user schema and backend foundation."
+        - item_id: "2.2"
+          description: "Implement resident signup rules."
+        - item_id: "2.3"
+          description: "Expose the signup endpoint."
+        - item_id: "4.1"
+          description: "Verify signup behavior."
+    notes: ""
+  - req_id: "REQ-002"
+    source_id: "FR-A2"
+    req_description: "User can log in with username/password and receive an access token."
+    priority: "MUST"
+    plan_mapping:
+      phase: "Phase-2"
+      phase_name: "Authentication and roles"
+      items:
+        - item_id: "1.1"
+          description: "Configure auth dependencies and token lifetime."
+        - item_id: "2.1"
+          description: "Implement password and JWT helpers."
+        - item_id: "2.2"
+          description: "Implement credential verification."
+        - item_id: "2.3"
+          description: "Expose the login endpoint."
+        - item_id: "4.1"
+          description: "Verify login and token behavior."
+    notes: ""
+  - req_id: "REQ-003"
+    source_id: "FR-A3"
+    req_description: "Authenticated user can fetch their own profile, role, and society."
+    priority: "MUST"
+    plan_mapping:
+      phase: "Phase-2"
+      phase_name: "Authentication and roles"
+      items:
+        - item_id: "1.2"
+          description: "Create app and router foundation."
+        - item_id: "3.1"
+          description: "Resolve current identity from database."
+        - item_id: "3.3"
+          description: "Implement GET /auth/me."
+        - item_id: "4.1"
+          description: "Test profile privacy and token requirements."
+    notes: ""
+  - req_id: "REQ-004"
+    source_id: "FR-A4"
+    req_description: "Ops/vendor accounts can only be created by the seed script."
+    priority: "MUST"
+    plan_mapping:
+      phase: "Phase-2"
+      phase_name: "Authentication and roles"
+      items:
+        - item_id: "2.2"
+          description: "Keep public signup resident-only and expand seed script."
+        - item_id: "2.3"
+          description: "Expose public signup without role control."
+        - item_id: "4.1"
+          description: "Test role-escalation and account-creation restrictions."
+    notes: ""
+  - req_id: "REQ-005"
+    source_id: "FR-A5"
+    req_description: "Protected endpoints enforce backend role and ownership authorization."
+    priority: "MUST"
+    plan_mapping:
+      phase: "Phase-2"
+      phase_name: "Authentication and roles"
+      items:
+        - item_id: "1.1"
+          description: "Add active-state schema and auth configuration."
+        - item_id: "1.2"
+          description: "Create API startup/router structure."
+        - item_id: "3.1"
+          description: "Authenticate by current database state."
+        - item_id: "3.2"
+          description: "Centralize reusable role checks."
+        - item_id: "3.3"
+          description: "Protect /auth/me."
+        - item_id: "4.1"
+          description: "Test role/state freshness; apply ownership in later resource services."
+    notes: "Phase 2 implements shared identity and role enforcement. Resource ownership is implemented alongside the resource endpoints in later phases."
+  - req_id: "REQ-006"
+    source_id: "FR-A6"
+    req_description: "Phone is collected but remains unverified in the MVP."
+    priority: "MUST"
+    plan_mapping:
+      phase: "Phase-2"
+      phase_name: "Authentication and roles"
+      items:
+        - item_id: "2.2"
+          description: "Collect phone without verification."
+        - item_id: "2.3"
+          description: "Return safe profile and document phone state."
+        - item_id: "4.1"
+          description: "Test phone persistence and limitation documentation."
+    notes: ""
+
+missing_requirements: []
+orphan_plan_items: []
+
+validation:
+  passed: true
+  errors: []
+  warnings:
+    - "The repository has no constitution.md; the plan was checked against the approved PRD and architecture."
+    - "The blueprint's original Phase 2 open questions are resolved in research.md as recommended defaults for owner review before implementation."

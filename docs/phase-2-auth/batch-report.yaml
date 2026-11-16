@@ -1,0 +1,101 @@
+batch_id: "B04"
+completed_tasks: ["T018", "T019"]
+blocked_tasks: []
+files_changed:
+  T018:
+    - file: "README.md"
+      change_type: "modified"
+      description: "Recorded exact PostgreSQL development migration and pytest commands, results, and downgrade warning."
+  T019:
+    - file: "docs/decision-log.md"
+      change_type: "modified"
+      description: "Recorded Phase 2 authentication decisions, test results, and explicit MVP limitations."
+    - file: "docs/devlopment-blueprintl.md"
+      change_type: "modified"
+      description: "Marked the Phase 2 implementation exit gate complete while retaining owner explain-back/review as pending."
+required_endpoints: []
+endpoint_probes: []
+postgres_migration_round_trip:
+  database_scope: "Supabase development"
+  precheck:
+    current_revision: "20261116_0002"
+    users: 0
+    inactive_users: 0
+  downgrade:
+    command: "python -m alembic downgrade 20261115_0001"
+    result: "PASS; 20261116_0002 downgraded to 20261115_0001."
+  upgrade:
+    command: "python -m alembic upgrade head"
+    result: "PASS; 20261115_0001 upgraded to 20261116_0002."
+  final_revision:
+    command: "python -m alembic current"
+    result: "20261116_0002 (head)"
+  schema_check:
+    command: "python -m alembic check"
+    result: "PASS; no new upgrade operations detected."
+  safety_note: "The users table was empty before the round-trip. Downgrade drops users.is_active; the README warns against running this check on production or when account-state values must be preserved."
+upstream_artifacts_consumed:
+  - artifact: "docs/phase-2-auth/plan.md"
+    used_for: "Step 4 migration, test, documentation, and tracker requirements."
+  - artifact: "backend/migrations/versions/20261116_add_user_is_active.py"
+    used_for: "Target revision and reversible migration scope."
+  - artifact: "docs/devlopment-blueprintl.md#Phase-2"
+    used_for: "Phase exit gate and explicit user explain-back/review status."
+evidence_mapping:
+  T018:
+    - upstream: "docs/phase-2-auth/plan.md#Step 4"
+      output: "README.md"
+      evidence: "Postgres downgrade/upgrade/check succeeded; full backend test suite passed 42 tests."
+  T019:
+    - upstream: "context/PRD.md#7.1-accounts-and-access"
+      output: "docs/decision-log.md"
+      evidence: "Recorded the one-day token, backend database-backed authorization, phone-unverified, and no-refresh decisions."
+traceability:
+  - requirement: "REQ-001"
+    plan_item: "4.1"
+    task: "T018,T019"
+    files: ["README.md", "docs/devlopment-blueprintl.md", "docs/decision-log.md"]
+    status: "complete"
+  - requirement: "REQ-002"
+    plan_item: "4.1"
+    task: "T018,T019"
+    files: ["README.md", "docs/decision-log.md"]
+    status: "complete"
+  - requirement: "REQ-003"
+    plan_item: "4.1"
+    task: "T018,T019"
+    files: ["README.md", "docs/devlopment-blueprintl.md"]
+    status: "complete"
+  - requirement: "REQ-004"
+    plan_item: "4.1"
+    task: "T018,T019"
+    files: ["README.md", "docs/decision-log.md"]
+    status: "complete"
+  - requirement: "REQ-005"
+    plan_item: "4.1"
+    task: "T018,T019"
+    files: ["README.md", "docs/devlopment-blueprintl.md"]
+    status: "partial"
+  - requirement: "REQ-006"
+    plan_item: "4.1"
+    task: "T018,T019"
+    files: ["README.md", "docs/decision-log.md"]
+    status: "complete"
+protocol_violation: false
+errors: []
+warnings:
+  - severity: INFO
+    message: "REQ-005 resource ownership checks remain with the future camp, booking, and job resource services; Phase 2 supplies shared identity and role dependencies."
+test_results:
+  backend_suite:
+    command: "pytest backend/tests -q (repository root; PYTHONPATH=backend)"
+    passed: 42
+    failed: 0
+    skipped: 0
+    failures: []
+  syntax_and_environment:
+    command: "python -m compileall -q backend/app backend/scripts backend/tests; python -m pip check; git diff --check"
+    passed: 3
+    failed: 0
+    skipped: 0
+    failures: []

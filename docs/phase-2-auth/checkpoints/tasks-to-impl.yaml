@@ -1,0 +1,557 @@
+metadata:
+  generated: "2026-11-16"
+  source_tasks: "docs/phase-2-auth/plan.md"
+  last_updated: "2026-11-16"
+
+summary:
+  total_tasks: 19
+  completed_tasks: 19
+  in_progress_tasks: 0
+  pending_tasks: 0
+  completion_percentage: 100.0
+
+tasks:
+  - task_id: "T001"
+    description: "Pin FastAPI/auth and TestClient dependencies."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/requirements.txt"
+          changes:
+            - change_type: "modified"
+              description: "Pinned FastAPI, Uvicorn, PyJWT, pwdlib Argon2, and HTTPX2."
+        - file: ".env.example"
+          changes:
+            - change_type: "modified"
+              description: "Added the default access-token lifetime in minutes."
+    verification:
+      build_passed: true
+      test_results:
+        command: "python -m pip install -r backend/requirements.txt"
+        passed: 1
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "All pinned dependencies installed in the project virtual environment."
+    upstream_trace:
+      plan_item: "1.1"
+      requirements: ["REQ-002", "REQ-003", "REQ-005"]
+      full_trace: "REQ-002,REQ-003,REQ-005 -> Phase 2 item 1.1 -> T001"
+  - task_id: "T002"
+    description: "Add user active state and reversible migration."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/app/models/domain.py"
+          changes:
+            - change_type: "modified"
+              description: "Added non-null is_active with a true default."
+        - file: "backend/migrations/versions/20261116_add_user_is_active.py"
+          changes:
+            - change_type: "added"
+              description: "Added reversible PostgreSQL/SQLite migration for is_active."
+        - file: "context/ARCHITECTURE.md"
+          changes:
+            - change_type: "modified"
+              description: "Documented the user active-state field."
+    verification:
+      build_passed: true
+      test_results:
+        command: "pytest backend/tests -q; Alembic upgrade/downgrade/upgrade on disposable SQLite; Supabase Alembic upgrade head"
+        passed: 17
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Supabase migration applied; alembic check reported no model/schema drift. Live Supabase was not downgraded."
+    upstream_trace:
+      plan_item: "1.1"
+      requirements: ["REQ-003", "REQ-005"]
+      full_trace: "REQ-003,REQ-005 -> Phase 2 item 1.1 -> T002"
+  - task_id: "T003"
+    description: "Configure one-day token expiry and production secret checks."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/app/core/config.py"
+          changes:
+            - change_type: "modified"
+              description: "Added 1440-minute expiry and runtime validation for production secrets."
+        - file: "docs/phase-2-auth/plan.md"
+          changes:
+            - change_type: "modified"
+              description: "Replaced the proposed 30-minute expiry with the owner's one-day choice."
+        - file: "docs/phase-2-auth/research.md"
+          changes:
+            - change_type: "modified"
+              description: "Recorded the one-day token duration and its longer stolen-token exposure window."
+        - file: "README.md"
+          changes:
+            - change_type: "modified"
+              description: "Documented the default duration and security trade-off."
+    verification:
+      build_passed: true
+      test_results:
+        command: "pytest backend/tests/test_app.py -q"
+        passed: 5
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Tests cover one-day value, invalid expiry, dev default, and production rejection of the default secret."
+    upstream_trace:
+      plan_item: "1.1"
+      requirements: ["REQ-002", "REQ-005"]
+      full_trace: "REQ-002,REQ-005 -> Phase 2 item 1.1 -> T003"
+  - task_id: "T004"
+    description: "Create FastAPI app factory, lifecycle validation, and health route."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/app/main.py"
+          changes:
+            - change_type: "added"
+              description: "Created the FastAPI app factory, startup config validation, and /health route."
+        - file: "backend/app/__init__.py"
+          changes:
+            - change_type: "added"
+              description: "Made the backend app a regular Python package."
+    verification:
+      build_passed: true
+      test_results:
+        command: "pytest backend/tests/test_app.py -q; HTTP GET http://127.0.0.1:18765/health"
+        passed: 1
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Live endpoint returned 200 and {\"status\":\"ok\"}. Port 8765 was already occupied, so the server was probed on 18765."
+    upstream_trace:
+      plan_item: "1.2"
+      requirements: ["REQ-003", "REQ-005"]
+      full_trace: "REQ-003,REQ-005 -> Phase 2 item 1.2 -> T004"
+  - task_id: "T005"
+    description: "Add API router scaffold and isolated database overrides for tests."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/app/api/__init__.py"
+          changes:
+            - change_type: "added"
+              description: "Exported the root API router."
+        - file: "backend/app/api/router.py"
+          changes:
+            - change_type: "added"
+              description: "Created the root APIRouter for later feature routers."
+        - file: "backend/tests/conftest.py"
+          changes:
+            - change_type: "added"
+              description: "Configured an isolated SQLite TestClient fixture using FastAPI dependency overrides."
+        - file: "backend/tests/test_app.py"
+          changes:
+            - change_type: "added"
+              description: "Added app health and config tests."
+    verification:
+      build_passed: true
+      test_results:
+        command: "pytest backend/tests -q"
+        passed: 17
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "TestClient uses the current Starlette-compatible HTTPX2 dependency."
+    upstream_trace:
+      plan_item: "1.2"
+      requirements: ["REQ-003", "REQ-005"]
+      full_trace: "REQ-003,REQ-005 -> Phase 2 item 1.2 -> T005"
+  - task_id: "T006"
+    description: "Implement Argon2id password and HS256 JWT helpers."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/app/core/security.py"
+          changes:
+            - change_type: "added"
+              description: "Added password hash/verify, dummy verification for unknown users, and JWT encode/decode with required claims and HS256 allow-list."
+    verification:
+      build_passed: true
+      test_results:
+        command: "pytest backend/tests/test_security.py -q"
+        passed: 5
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Tests cover password verification, subject/claims, signature, expiry, and algorithm rejection."
+    upstream_trace:
+      plan_item: "2.1"
+      requirements: ["REQ-002"]
+      full_trace: "REQ-002 -> Phase 2 item 2.1 -> T006"
+  - task_id: "T007"
+    description: "Define strict signup/login and safe response schemas."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/app/api/auth_schemas.py"
+          changes:
+            - change_type: "added"
+              description: "Added bounded input schemas with extra-field rejection, safe user summary, explicit phone_verified false, and bearer-token response."
+    verification:
+      build_passed: true
+      test_results:
+        command: "pytest backend/tests/test_auth_api.py -q"
+        passed: 7
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Signup tests verify role escalation is rejected and password hashes are not serialized."
+    upstream_trace:
+      plan_item: "2.2"
+      requirements: ["REQ-001", "REQ-002", "REQ-006"]
+      full_trace: "REQ-001,REQ-002,REQ-006 -> Phase 2 item 2.2 -> T007"
+  - task_id: "T008"
+    description: "Implement resident signup and generic username/password authentication services."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/app/services/__init__.py"
+          changes:
+            - change_type: "added"
+              description: "Initialized the backend services package."
+        - file: "backend/app/services/auth.py"
+          changes:
+            - change_type: "added"
+              description: "Added case-insensitive invite lookup, resident-only creation, duplicate checks, password authentication, inactive-account rejection, and dummy verification for unknown usernames."
+    verification:
+      build_passed: true
+      test_results:
+        command: "pytest backend/tests/test_auth_api.py -q"
+        passed: 7
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Invalid invites and duplicate usernames/phones are exercised through the HTTP API."
+    upstream_trace:
+      plan_item: "2.2"
+      requirements: ["REQ-001", "REQ-002", "REQ-006"]
+      full_trace: "REQ-001,REQ-002,REQ-006 -> Phase 2 item 2.2 -> T008"
+  - task_id: "T009"
+    description: "Seed privileged accounts only from complete explicit environment configuration."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/scripts/seed.py"
+          changes:
+            - change_type: "modified"
+              description: "Added optional SEED_OPS_* and SEED_VENDOR_* account configuration, validation, password hashing, safe same-role updates, and promotion/collision refusal."
+        - file: ".env.example"
+          changes:
+            - change_type: "modified"
+              description: "Documented optional seed variable names without including credentials."
+    verification:
+      build_passed: true
+      test_results:
+        command: "pytest backend/tests/test_seed.py -q"
+        passed: 6
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Tests cover omitted and partial configuration, weak default password refusal, role-specific creation, and refusing resident promotion."
+    upstream_trace:
+      plan_item: "2.2"
+      requirements: ["REQ-004"]
+      full_trace: "REQ-004 -> Phase 2 item 2.2 -> T009"
+  - task_id: "T010"
+    description: "Implement public resident signup and login endpoints with required status and transaction behavior."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/app/api/auth.py"
+          changes:
+            - change_type: "added"
+              description: "Added POST /auth/signup and POST /auth/login, conflict mapping, generic bearer 401, and database rollback on write failures."
+    verification:
+      build_passed: true
+      test_results:
+        command: "pytest backend/tests/test_auth_api.py -q"
+        passed: 7
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Unknown username and wrong password have identical 401 bodies and both return WWW-Authenticate: Bearer."
+    upstream_trace:
+      plan_item: "2.3"
+      requirements: ["REQ-001", "REQ-002", "REQ-006"]
+      full_trace: "REQ-001,REQ-002,REQ-006 -> Phase 2 item 2.3 -> T010"
+  - task_id: "T011"
+    description: "Register auth routes and document phone verification limitation."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/app/api/router.py"
+          changes:
+            - change_type: "modified"
+              description: "Registered the auth router with the application API router."
+        - file: "README.md"
+          changes:
+            - change_type: "modified"
+              description: "Documented signup/login paths, phone-unverified status, and optional seed account configuration."
+    verification:
+      build_passed: true
+      test_results:
+        command: "Live FastAPI endpoint probes against an isolated SQLite database"
+        passed: 4
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "GET /health returned 200; signup returned 201, login 200, and invalid invite 422."
+    upstream_trace:
+      plan_item: "2.3"
+      requirements: ["REQ-001", "REQ-002", "REQ-006"]
+      full_trace: "REQ-001,REQ-002,REQ-006 -> Phase 2 item 2.3 -> T011"
+  - task_id: "T012"
+    description: "Validate bearer tokens and load active users from the database for every protected request."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/app/core/dependencies.py"
+          changes:
+            - change_type: "added"
+              description: "Added missing/invalid/expired/unknown/inactive user handling and a per-request database lookup with eager society loading."
+    verification:
+      build_passed: true
+      test_results:
+        command: "pytest backend/tests/test_auth_api.py -q"
+        passed: 14
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Missing, malformed, expired, unknown-subject, and inactive-user cases return the same 401 with WWW-Authenticate: Bearer."
+    upstream_trace:
+      plan_item: "3.1"
+      requirements: ["REQ-003", "REQ-005"]
+      full_trace: "REQ-003,REQ-005 -> Phase 2 item 3.1 -> T012"
+  - task_id: "T013"
+    description: "Provide reusable role enforcement for protected routes."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/app/core/dependencies.py"
+          changes:
+            - change_type: "added"
+              description: "Added require_role dependency returning 403 for authenticated callers with a different role."
+    verification:
+      build_passed: true
+      test_results:
+        command: "pytest backend/tests/test_auth_api.py -q"
+        passed: 14
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "HTTP test-only ops route denies residents and accepts an ops account."
+    upstream_trace:
+      plan_item: "3.2"
+      requirements: ["REQ-005"]
+      full_trace: "REQ-005 -> Phase 2 item 3.2 -> T013"
+  - task_id: "T014"
+    description: "Return the authenticated caller's safe profile and society details from GET /auth/me."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/app/api/auth.py"
+          changes:
+            - change_type: "modified"
+              description: "Added the protected current-user profile endpoint."
+        - file: "backend/app/api/auth_schemas.py"
+          changes:
+            - change_type: "modified"
+              description: "Added safe society and current-user response models."
+    verification:
+      build_passed: true
+      test_results:
+        command: "pytest backend/tests/test_auth_api.py -q"
+        passed: 14
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Profile includes the current database role and society name/city, excludes password hash, and identifies phone as unverified."
+    upstream_trace:
+      plan_item: "3.3"
+      requirements: ["REQ-003", "REQ-006"]
+      full_trace: "REQ-003,REQ-006 -> Phase 2 item 3.3 -> T014"
+  - task_id: "T015"
+    description: "Test password and token helpers."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/tests/test_security.py"
+          changes:
+            - change_type: "added"
+              description: "Added focused password hashing and JWT claim/signature/expiry/algorithm tests."
+        - file: "backend/tests/test_auth_api.py"
+          changes:
+            - change_type: "added"
+              description: "Verified unknown-user and wrong-password login failures are indistinguishable."
+        - file: "backend/tests/conftest.py"
+          changes:
+            - change_type: "modified"
+              description: "Added an isolated sufficiently long test signing key and per-test file-backed SQLite database fixture."
+    verification:
+      build_passed: true
+      test_results:
+        command: "pytest backend/tests/test_security.py backend/tests/test_auth_api.py -q"
+        passed: 12
+        failed: 0
+        skipped: 0
+        failures: []
+    upstream_trace:
+      plan_item: "4.1"
+      requirements: ["REQ-002"]
+      full_trace: "REQ-002 -> Phase 2 item 4.1 -> T015"
+  - task_id: "T016"
+    description: "Test authentication endpoints and failure cases."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/tests/test_auth_api.py"
+          changes:
+            - change_type: "modified"
+              description: "Added protected profile, missing/invalid/expired/unknown token, role rejection, and active/role freshness coverage."
+        - file: "backend/tests/conftest.py"
+          changes:
+            - change_type: "modified"
+              description: "Added an isolated test-only ops route for exercising the reusable role dependency."
+    verification:
+      build_passed: true
+      test_results:
+        command: "pytest backend/tests/test_auth_api.py -q"
+        passed: 14
+        failed: 0
+        skipped: 0
+        failures: []
+    upstream_trace:
+      plan_item: "4.1"
+      requirements: ["REQ-001", "REQ-002", "REQ-003", "REQ-004", "REQ-005", "REQ-006"]
+      full_trace: "REQ-001,REQ-002,REQ-003,REQ-004,REQ-005,REQ-006 -> Phase 2 item 4.1 -> T016"
+  - task_id: "T017"
+    description: "Verify role and account-state changes are effective on the next request."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "backend/tests/test_auth_api.py"
+          changes:
+            - change_type: "modified"
+              description: "Added a test changing a persisted user's role and active state while reusing the same token."
+    verification:
+      build_passed: true
+      test_results:
+        command: "pytest backend/tests/test_auth_api.py::test_current_user_reloads_role_and_active_state_from_database -q"
+        passed: 1
+        failed: 0
+        skipped: 0
+        failures: []
+    upstream_trace:
+      plan_item: "4.1"
+      requirements: ["REQ-003", "REQ-005"]
+      full_trace: "REQ-003,REQ-005 -> Phase 2 item 4.1 -> T017"
+  - task_id: "T018"
+    description: "Verify the PostgreSQL migration round-trip, full backend tests, and document exact commands/results."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "README.md"
+          changes:
+            - change_type: "modified"
+              description: "Documented the development-only Alembic round-trip commands, warning, final revision, schema check, and 42-test result."
+    verification:
+      build_passed: true
+      test_results:
+        command: "backend: alembic downgrade 20261115_0001; alembic upgrade head; alembic current; alembic check; repository root: pytest backend/tests -q"
+        passed: 42
+        failed: 0
+        skipped: 0
+        failures: []
+      notes: "Supabase development database had zero user rows before the test; final revision is 20261116_0002 (head), and alembic check reported no pending operations."
+    upstream_trace:
+      plan_item: "4.1"
+      requirements: ["REQ-001", "REQ-002", "REQ-003", "REQ-004", "REQ-005", "REQ-006"]
+      full_trace: "REQ-001,REQ-002,REQ-003,REQ-004,REQ-005,REQ-006 -> Phase 2 item 4.1 -> T018"
+  - task_id: "T019"
+    description: "Update the phase tracker and decision log with auth outcomes and explicit MVP limitations."
+    status: "completed"
+    implementation:
+      files_changed:
+        - file: "docs/devlopment-blueprintl.md"
+          changes:
+            - change_type: "modified"
+              description: "Marked the Phase 2 implementation exit gate complete, recorded tests and migration validation, and kept owner explain-back/review pending."
+        - file: "docs/decision-log.md"
+          changes:
+            - change_type: "modified"
+              description: "Recorded password/JWT, database-backed authorization, phone-unverified/no-refresh limitations, and verification results."
+    verification:
+      build_passed: true
+      test_results:
+        command: "Review plan, tracker, and decision-log updates"
+        passed: 1
+        failed: 0
+        skipped: 0
+        failures: []
+    upstream_trace:
+      plan_item: "4.1"
+      requirements: ["REQ-001", "REQ-002", "REQ-003", "REQ-004", "REQ-005", "REQ-006"]
+      full_trace: "REQ-001,REQ-002,REQ-003,REQ-004,REQ-005,REQ-006 -> Phase 2 item 4.1 -> T019"
+
+pending_tasks: []
+
+untracked_changes: []
+
+traceability_chain:
+  - chain_id: "TRACE-AUTH-FOUNDATION"
+    requirement: "REQ-005"
+    plan_phase: "Phase-2"
+    plan_item: "1.1, 1.2"
+    tasks: ["T002", "T003", "T004", "T005"]
+    files:
+      - "backend/app/models/domain.py"
+      - "backend/migrations/versions/20261116_add_user_is_active.py"
+      - "backend/app/core/config.py"
+      - "backend/app/main.py"
+      - "backend/app/api/router.py"
+    status: "partial"
+  - chain_id: "TRACE-RESIDENT-SIGNUP-LOGIN"
+    requirement: "REQ-001,REQ-002,REQ-004,REQ-006"
+    plan_phase: "Phase-2"
+    plan_item: "2.1, 2.2, 2.3"
+    tasks: ["T006", "T007", "T008", "T009", "T010", "T011"]
+    files:
+      - "backend/app/core/security.py"
+      - "backend/app/api/auth_schemas.py"
+      - "backend/app/services/auth.py"
+      - "backend/scripts/seed.py"
+      - "backend/app/api/auth.py"
+      - "backend/app/api/router.py"
+    status: "partial"
+  - chain_id: "TRACE-CURRENT-USER-AND-ROLES"
+    requirement: "REQ-003,REQ-005"
+    plan_phase: "Phase-2"
+    plan_item: "3.1, 3.2, 3.3"
+    tasks: ["T012", "T013", "T014", "T016", "T017"]
+    files:
+      - "backend/app/core/dependencies.py"
+      - "backend/app/api/auth.py"
+      - "backend/app/api/auth_schemas.py"
+      - "backend/tests/test_auth_api.py"
+    status: "partial"
+  - chain_id: "TRACE-PHASE2-EXIT-GATE"
+    requirement: "REQ-001,REQ-002,REQ-003,REQ-004,REQ-005,REQ-006"
+    plan_phase: "Phase-2"
+    plan_item: "4.1"
+    tasks: ["T018", "T019"]
+    files:
+      - "README.md"
+      - "docs/decision-log.md"
+      - "docs/devlopment-blueprintl.md"
+    status: "complete"
+
+validation:
+  passed: true
+  errors: []
+  warnings: []
+  blocking_issues: []

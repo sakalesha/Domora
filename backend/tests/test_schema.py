@@ -144,6 +144,13 @@ def test_resident_requires_society_and_unit(session: Session):
         session.commit()
 
 
+def test_new_users_are_active_by_default(session: Session):
+    society = _make_society(session)
+    user = _make_user(session, "active-resident", "+919900000006", society=society)
+
+    assert user.is_active is True
+
+
 @pytest.mark.parametrize(
     "field,value",
     [
