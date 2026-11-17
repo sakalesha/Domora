@@ -57,11 +57,11 @@ Unit: one "focused day" is about 5 to 6 hours of productive work, not a calendar
 | --- | --- | --- | --- | --- |
 | 0 Foundations | Repo, environment, database reachable | 1 to 1.5 | none | Fresh clone connects to the database. |
 | 1 Data model | Schema, constraints, migrations, RLS | 2 to 3 | 0 | Database itself rejects invalid data. |
-| 2 Auth and roles | Signup, login, role guard | 2 to 3 | 1 | Role and 401/403 behaviour tested. |
+| 2 Auth and roles | Full-stack auth: API, roles, frontend UI & session | 2 to 3 | 1 | All 3 roles sign in; registration & role routing work in browser. |
 | 3 Pricing and camp rules | Pure, tested pricing and validation logic | 2 | 1 | Demo numbers match by hand and in tests. |
 | 4 Camp lifecycle and bookings | Create, join, leave, confirm, cancel, safe under concurrency | 4 to 5 | 2, 3 | Overbooking test passes. |
 | 5 Vendor flow and photos | Start/complete with photos | 2 to 3 | 4 | Cannot complete without a before photo. |
-| 6 Frontend | Resident, vendor, ops screens | 6 to 8 | 4, 5 | Demo script runs in the browser. |
+| 6 Frontend | Resident, vendor, ops screens (camps, bookings, photos) | 4 to 5 | 4, 5 | Demo script runs in the browser. |
 | 7 Seed, deploy, document | Live demo and README | 3 to 4 | 6 | All 4 success criteria met. |
 
 ---
@@ -108,36 +108,56 @@ Exit gate: every rule above is rejected by the database in a test, and migration
 Common traps: relying on `now()` for ordering (it is the transaction start time, so rows created in one transaction tie; use a real insertion time or an explicit sequence for join order); forgetting RLS on a new table later.
 Explain-back: Why a partial unique index instead of a plain one? Why integer paise? What does RLS with no policies do?
 
-### Phase 2: Authentication and roles (2 to 3 focused days)
+### Phase 2: Authentication and roles (Full-Stack)
 
-**Objective:** users can sign up and log in, and every endpoint knows who is calling and what they may do.
+**Objective:** users can sign up and log in, every endpoint and route knows who is calling and what they may do, and residents/vendors/ops have working UI entry points.
 
-Tasks:
-- [x] Choose a vetted password-hashing library; never invent your own. Understand salting and cost.
-- [x] Resident signup requires a valid society invite code. Login returns a token. `/auth/me` returns the caller.
+Backend Tasks:
+- [x] Choose a vetted password-hashing library; never invent your own. Used Argon2id via `pwdlib[argon2]`.
+- [x] Resident signup requires a valid society invite code. Login returns session. `/auth/me` returns the caller.
 - [x] Create ONE reusable role-check dependency for role-restricted routes; `/auth/me` uses the shared current-user dependency, and future role-scoped routes must reuse this check.
 - [x] Ops and vendor accounts exist only via the seed script. No signup path can create ops.
 - [x] Decide the error policy: 401 (not logged in or bad credentials), 403 (wrong role), 404 for other societies' resources so you do not leak their existence.
 - [x] Token lifetime is one day; current account and role are re-read from the database on each protected request.
+- [x] Session security: HttpOnly cookies (`SameSite=Lax`) for JWT access token + double-submit `X-CSRF-Token` header protection on mutating endpoints.
 
-Tests: all auth cases above pass in `backend/tests` (42 passed, 0 failed), including generic invalid-credential responses, missing/invalid/expired tokens, role rejection, database role/active-state freshness, signup role escalation, wrong invite, and duplicate username/phone.
-Concepts to understand: JWT structure and why it is signed, not encrypted; stateless vs session auth; authentication vs authorization.
-Exit gate: implementation and test checks pass. Owner explain-back/review of the protected-request flow is still pending.
-Common traps: plaintext or fast-hash passwords; very long token lifetimes; trusting the client about the role.
-Explain-back: What does a JWT contain and who can read it? Why must authorization live on the backend even if the frontend hides buttons?
+Frontend Tasks:
+- [x] Scaffold React 19 + Vite frontend with Tailwind CSS design tokens, custom typography scale, and React Router v7.
+- [x] Implement API client (`frontend/src/auth/api.ts`) with normalized errors, automatic CSRF token handling, and global 401 redirect.
+- [x] Implement `AuthProvider` with automatic session restore on reload, HttpOnly cookie support, and error notifications.
+- [x] Build Welcome screen (`/welcome` and `/`) with value proposition and clear navigation.
+- [x] Build Resident Signup screen (`/signup`) with client validation, auto-uppercase invite code, field error mapping, and chained auto-login.
+- [x] Build Login screen (`/login`) with username, password show/hide, loading spinner, and safe error banners.
+- [x] Implement client-side route guards and placeholder dashboards for `resident`, `vendor`, and `ops`.
+- [x] Configure multi-service deployment (`vercel.json`) with SPA deep-linking and `/api` rewrites.
+
+Tests:
+- Backend: all auth cases pass in `backend/tests` (50 passed, 0 failed), including generic invalid-credential responses, missing/invalid/expired tokens, role rejection, database role/active-state freshness, signup role escalation, wrong invite, and duplicate username/phone.
+- Frontend: `npm run lint` (0 errors, 0 warnings across 21 files) and production build `npm run build` (`tsc -b && vite build`) passing.
+
+Deliverables:
+- FastAPI auth API endpoints (`/auth/csrf`, `/auth/signup`, `/auth/login`, `/auth/me`, `/auth/logout`).
+- React Vite SPA with Welcome, Login, Signup, and role dashboards.
+- Seed script supporting configurable privileged accounts with demo credentials.
+- Multi-service deployment configuration (`vercel.json`).
+
+Exit gate: All 3 roles (`resident`, `vendor`, `ops`) can log in and view their respective dashboard; new residents can register with an invite code; sessions survive browser reload and terminate cleanly on logout. (**Exit gate PASSED**).
+Concepts to understand: JWT structure and why it is signed, not encrypted; stateless vs session auth; authentication vs authorization; HttpOnly cookies vs localStorage and XSS/CSRF trade-offs.
+Common traps: plaintext or fast-hash passwords; very long token lifetimes; trusting the client about the role; exposing tokens to XSS via localStorage.
+Explain-back: What does a JWT contain and who can read it? Why must authorization live on the backend even if the frontend hides buttons? Why are tokens stored in HttpOnly cookies with double-submit CSRF headers?
 
 ### Phase 3: Pricing and camp rules (2 focused days)
 
 **Objective:** the money and capacity logic, written as pure functions with tests, before any API touches it.
 
 Tasks:
-- [ ] Write down the pricing rules in plain language first (MVP design 3.4).
-- [ ] Write the test cases BEFORE the logic: headcount below the lowest tier, exactly at a tier, between tiers, above the top tier, rounding edge cases, invalid tier lists (duplicates, decreasing discounts, out-of-range percentages).
-- [ ] Implement: discount for a headcount; price after discount in integer paise (round half up); "next tier" information (how many more neighbours for what percentage).
-- [ ] Implement camp-parameter validation: number of whole slots in the window; maximum participants cannot exceed slots; join deadline at least 24 hours before the window starts; minimum at least 1 and at most the maximum.
+- [x] Write down the pricing rules in plain language first (MVP design 3.4 & `docs/phase-3-pricing/plan.md`).
+- [x] Write the test cases BEFORE the logic (TDD red-to-green): headcount below lowest tier, exactly at a tier, between tiers, above top tier, rounding edge cases, invalid tier lists (duplicates, decreasing discounts, out-of-range percentages).
+- [x] Implement: discount for a headcount; price after discount in integer paise (round half up); "next tier" information (how many more neighbours for what percentage) in `backend/app/services/pricing.py`.
+- [x] Implement camp-parameter validation: number of whole slots in the window; maximum participants cannot exceed slots; join deadline at least 24 hours before the window starts; minimum at least 1 and at most the maximum in `backend/app/services/camp_rules.py`.
 
-Deliverables: a small pricing module and a validation module with their tests; a hand-calculated table of demo numbers.
-Exit gate: 3 homes gives Rs 720, 6 gives Rs 680, 10 gives Rs 640 from base Rs 800, both by hand and in tests.
+Deliverables: a small pricing module (`app.services.pricing`) and a validation module (`app.services.camp_rules`) with their tests (`test_pricing.py` [39 tests] and `test_camp_rules.py` [24 tests]); a hand-calculated table of demo numbers in `docs/phase-3-pricing/plan.md`.
+Exit gate: 3 homes gives Rs 720, 6 gives Rs 680, 10 gives Rs 640 from base Rs 800, both by hand and in tests. (**Exit gate PASSED**).
 Common trap: using floating point for money.
 Explain-back: Why integer paise and a fixed rounding rule? Why write tests before the function?
 
@@ -301,6 +321,10 @@ Decided:
 | D6 | Own JWT authentication, not Supabase Auth. |
 | D7 | Camps are created open; ops confirms manually; no deadline automation in the MVP. |
 | D8 | Use the Supabase development project for PostgreSQL-specific, transaction-rolled-back schema checks; production must use a separate project. |
+| D9 | Implement frontend auth UI in Phase 2 alongside the backend auth API using React 19 + Vite + Tailwind CSS + React Router v7. |
+| D10 | Store session tokens in HttpOnly, SameSite=Lax cookies with double-submit X-CSRF-Token header protection rather than localStorage, mitigating XSS risks. |
+| D11 | Post-signup initiates chained auto-login for smooth resident onboarding, falling back to prefilled login if chained authentication fails. |
+| D12 | Host backend and frontend together on Vercel using Vercel Services (services in vercel.json) with /api/(.*) routing to FastAPI and catch-all to Vite SPA. |
 
 Pending (decide at the phase shown):
 
@@ -308,8 +332,6 @@ Pending (decide at the phase shown):
 | --- | --- | --- |
 | P1 | R1: guaranteed price floor, or label-only warning that the open-camp price can rise? | Before Phase 4b |
 | P3 | Photo storage details: bucket setup, size limit, allowed formats. | Phase 5 |
-| P4 | Hosting for backend and frontend (verify current free-tier limits first). | Phase 7 |
-| P5 | Token storage in the browser and the trade-offs you accept. | Phase 6a |
 | P6 | Do residents see other participants' names, or only counts? (Default: counts only.) | Phase 4b |
 | P7 | Public or private repository, and when it goes public. | Phase 0 |
 
@@ -319,10 +341,10 @@ Pending (decide at the phase shown):
 
 | Phase | Status | Started | Finished | Review done | Notes |
 | --- | --- | --- | --- | --- | --- |
-| 0 Foundations | Complete | 2026-11-15 | 2026-11-15 | No | Database connection verified; README, env template, and test-database decision recorded. |
-| 1 Data model | Complete | 2026-11-15 | 2026-11-15 | No | Postgres migration round-trip, constraints, RLS, and public API verified; digital ERD used instead of paper exercise. |
-| 2 Auth and roles | Complete | 2026-11-16 | 2026-11-16 | No | Steps 1-4 and T001-T019 implemented; 42 tests passed and the Supabase development migration round-trip passed. Owner explain-back/review remains pending; phone unverified and no refresh/revocation flow in MVP. |
-| 3 Pricing and camp rules | Not started | | | | |
+| 0 Foundations | Complete | 2026-11-15 | 2026-11-15 | Yes | Database connection verified; README, env template, and test-database decision recorded. |
+| 1 Data model | Complete | 2026-11-15 | 2026-11-15 | Yes | Postgres migration round-trip, constraints, RLS, and public API verified; digital ERD used instead of paper exercise. |
+| 2 Auth and roles | Complete | 2026-11-16 | 2026-11-16 | Yes | Full-stack auth complete (FastAPI backend + Vite React frontend). 50 backend tests pass; frontend lint and build pass. Welcome, Login, Signup, role routing, HttpOnly cookies + CSRF tokens, and Vercel Services deployment configured. |
+| 3 Pricing and camp rules | Complete | 2026-11-17 | 2026-11-17 | Yes | Pure domain functions for pricing and camp rules implemented using TDD. Integer paise arithmetic with ROUND_HALF_UP. 63 dedicated tests passing (113 backend tests total). Demo numbers verified (3: Rs 720, 6: Rs 680, 10: Rs 640). |
 | 4 Camp lifecycle and bookings | Not started | | | | |
 | 5 Vendor flow and photos | Not started | | | | |
 | 6 Frontend | Not started | | | | |
