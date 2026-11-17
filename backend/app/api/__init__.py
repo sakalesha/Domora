@@ -1,4 +1,4 @@
-"""HTTP API routers."""
+from __future__ import annotations
 
 from app.api.router import api_router
 

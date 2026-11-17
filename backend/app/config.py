@@ -7,8 +7,14 @@ from urllib.parse import urlsplit
 from dotenv import load_dotenv
 from sqlalchemy.engine import URL, make_url
 
-BASE_DIR = Path(__file__).resolve().parents[3]
-load_dotenv(BASE_DIR / ".env")
+# Load .env from project root or backend folder
+_current_file = Path(__file__).resolve()
+_search_dirs = [_current_file.parents[2], _current_file.parents[1]]
+for _dir in _search_dirs:
+    _env_path = _dir / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path)
+        break
 
 _database_url = make_url(os.getenv("DATABASE_URL", "sqlite:///./domora.db"))
 if _database_url.drivername in {"postgres", "postgresql"}:

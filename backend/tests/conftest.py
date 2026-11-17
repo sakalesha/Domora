@@ -9,8 +9,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
-from app.core.dependencies import require_role
+from app.database import get_db
+from app.dependencies import require_role
 from app.main import create_app
 from app.models.base import Base
 from app.models import domain as _domain_models  # noqa: F401

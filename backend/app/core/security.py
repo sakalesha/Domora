@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import jwt
 from pwdlib import PasswordHash
 
-from app.core.config import ACCESS_TOKEN_EXPIRE_MINUTES, SECRET_KEY
+from app.config import ACCESS_TOKEN_EXPIRE_MINUTES, SECRET_KEY
 
 ALGORITHM = "HS256"
 _password_hash = PasswordHash.recommended()

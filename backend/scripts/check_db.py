@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-from app.core.database import engine
+from app.database import engine
 
 
 def check_database() -> None:

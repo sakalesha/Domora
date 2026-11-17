@@ -9,7 +9,7 @@ import time
 import app.core.security as security
 from fastapi import HTTPException, Request, status
 
-from app.core.config import CORS_ALLOWED_ORIGINS, CSRF_TOKEN_EXPIRE_SECONDS
+from app.config import CORS_ALLOWED_ORIGINS, CSRF_TOKEN_EXPIRE_SECONDS
 
 CSRF_COOKIE_NAME = "domora_csrf"
 CSRF_HEADER_NAME = "X-CSRF-Token"

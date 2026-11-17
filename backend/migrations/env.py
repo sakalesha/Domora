@@ -5,7 +5,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import create_engine
 
-from app.core.config import DATABASE_URL
+from app.config import DATABASE_URL
 from app.models.base import Base
 from app.models.domain import *  # noqa: F401,F403
 

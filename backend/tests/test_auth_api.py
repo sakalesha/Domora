@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 
 import app.core.security as security
-from app.core.config import ACCESS_COOKIE_NAME
+from app.config import ACCESS_COOKIE_NAME
 from app.core.csrf import CSRF_COOKIE_NAME, create_csrf_token, is_valid_csrf_token
 from app.core.security import create_access_token
 from app.models.domain import Society, User
@@ -39,7 +39,7 @@ def _signup_payload(**overrides) -> dict[str, str]:
 
 
 def _csrf_headers(client) -> dict[str, str]:
-    response = client.get("/auth/csrf", headers={"Origin": ALLOWED_ORIGIN})
+    response = client.get("/api/auth/csrf", headers={"Origin": ALLOWED_ORIGIN})
     assert response.status_code == 200
     return {
         "Origin": ALLOWED_ORIGIN,
@@ -49,7 +49,7 @@ def _csrf_headers(client) -> dict[str, str]:
 
 def _signup(client, **overrides):
     return client.post(
-        "/auth/signup",
+        "/api/auth/signup",
         json=_signup_payload(**overrides),
         headers=_csrf_headers(client),
     )
@@ -57,7 +57,7 @@ def _signup(client, **overrides):
 
 def _login(client, username: str = "resident.one", password: str = "correct horse battery staple"):
     return client.post(
-        "/auth/login",
+        "/api/auth/login",
         json={"username": username, "password": password},
         headers=_csrf_headers(client),
     )
@@ -113,7 +113,7 @@ def test_signup_rejects_duplicate_username_and_phone(client, db_session):
 
 def test_signup_requires_csrf_token(client):
     response = client.post(
-        "/auth/signup",
+        "/api/auth/signup",
         json=_signup_payload(),
         headers={"Origin": ALLOWED_ORIGIN},
     )
@@ -142,7 +142,7 @@ def test_login_sets_http_only_cookie_without_exposing_token(client, db_session):
     assert "secure" not in access_cookie
     assert "domain=" not in access_cookie
 
-    profile = client.get("/auth/me")
+    profile = client.get("/api/auth/me")
     assert profile.status_code == 200
     assert profile.json()["username"] == "resident.one"
     assert "password_hash" not in profile.text
@@ -177,7 +177,7 @@ def test_current_user_can_fetch_only_safe_profile_and_society_details(client, db
     assert _signup(client).status_code == 201
     assert _login(client).status_code == 200
 
-    response = client.get("/auth/me")
+    response = client.get("/api/auth/me")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -195,9 +195,9 @@ def test_current_user_can_fetch_only_safe_profile_and_society_details(client, db
 
 
 def test_current_user_rejects_missing_cookie_and_bearer_only(client):
-    missing_cookie = client.get("/auth/me")
+    missing_cookie = client.get("/api/auth/me")
     bearer_only = client.get(
-        "/auth/me",
+        "/api/auth/me",
         headers={"Authorization": "Bearer invalid-token"},
     )
 
@@ -221,7 +221,7 @@ def test_current_user_rejects_expired_and_unknown_subject_cookies(client):
 
     for token in (expired_token, unknown_user_token, malformed_subject_token):
         response = client.get(
-            "/auth/me",
+            "/api/auth/me",
             headers={"Cookie": f"{ACCESS_COOKIE_NAME}={token}"},
         )
         assert response.status_code == 401
@@ -255,26 +255,26 @@ def test_current_user_reloads_role_and_active_state_from_database(client, db_ses
     assert _login(client).status_code == 200
 
     user = db_session.scalar(select(User).where(User.username == "resident.one"))
-    response = client.get("/auth/me")
+    response = client.get("/api/auth/me")
     assert response.status_code == 200
     assert response.json()["role"] == "resident"
 
     user.role = "vendor"
     db_session.commit()
-    changed_role = client.get("/auth/me")
+    changed_role = client.get("/api/auth/me")
     assert changed_role.status_code == 200
     assert changed_role.json()["role"] == "vendor"
 
     user.is_active = False
     db_session.commit()
-    deactivated = client.get("/auth/me")
+    deactivated = client.get("/api/auth/me")
     assert deactivated.status_code == 401
 
 
 def test_csrf_requires_an_allowed_origin(client):
-    missing_origin = client.get("/auth/csrf")
+    missing_origin = client.get("/api/auth/csrf")
     disallowed_origin = client.get(
-        "/auth/csrf",
+        "/api/auth/csrf",
         headers={"Origin": "https://not-allowed.example"},
     )
 
@@ -285,21 +285,21 @@ def test_csrf_requires_an_allowed_origin(client):
 def test_csrf_allows_browser_same_origin_get_without_origin_header(client):
     # Modern browsers omit the Origin header on same-origin GET requests,
     # sending Sec-Fetch-Site: same-origin or Referer with matching host.
-    response_sec_fetch = client.get("/auth/csrf", headers={"Sec-Fetch-Site": "same-origin"})
+    response_sec_fetch = client.get("/api/auth/csrf", headers={"Sec-Fetch-Site": "same-origin"})
     assert response_sec_fetch.status_code == 200
     assert "csrf_token" in response_sec_fetch.json()
 
-    response_referer = client.get("/auth/csrf", headers={"Referer": "http://testserver/login"})
+    response_referer = client.get("/api/auth/csrf", headers={"Referer": "http://testserver/login"})
     assert response_referer.status_code == 200
     assert "csrf_token" in response_referer.json()
 
 
 def test_csrf_cookie_is_http_only_signed_and_reused(client):
-    first = client.get("/auth/csrf", headers={"Origin": ALLOWED_ORIGIN})
+    first = client.get("/api/auth/csrf", headers={"Origin": ALLOWED_ORIGIN})
     token = first.json()["csrf_token"]
     cookie = first.headers["set-cookie"].lower()
 
-    second = client.get("/auth/csrf", headers={"Origin": ALLOWED_ORIGIN})
+    second = client.get("/api/auth/csrf", headers={"Origin": ALLOWED_ORIGIN})
 
     assert first.status_code == 200
     assert second.status_code == 200
@@ -312,25 +312,25 @@ def test_csrf_cookie_is_http_only_signed_and_reused(client):
 
 
 def test_csrf_rejects_missing_mismatched_and_expired_tokens(client):
-    first = client.get("/auth/csrf", headers={"Origin": ALLOWED_ORIGIN})
+    first = client.get("/api/auth/csrf", headers={"Origin": ALLOWED_ORIGIN})
     stale_token = first.json()["csrf_token"]
     missing_header = client.post(
-        "/auth/login",
+        "/api/auth/login",
         json={"username": "unknown.user", "password": "wrong"},
         headers={"Origin": ALLOWED_ORIGIN},
     )
     assert missing_header.status_code == 403
 
     client.cookies.clear()
-    current = client.get("/auth/csrf", headers={"Origin": ALLOWED_ORIGIN})
+    current = client.get("/api/auth/csrf", headers={"Origin": ALLOWED_ORIGIN})
     current_token = current.json()["csrf_token"]
     mismatched = client.post(
-        "/auth/login",
+        "/api/auth/login",
         json={"username": "unknown.user", "password": "wrong"},
         headers={"Origin": ALLOWED_ORIGIN, "X-CSRF-Token": stale_token},
     )
     accepted = client.post(
-        "/auth/login",
+        "/api/auth/login",
         json={"username": "unknown.user", "password": "wrong"},
         headers={"Origin": ALLOWED_ORIGIN, "X-CSRF-Token": current_token},
     )
@@ -339,7 +339,7 @@ def test_csrf_rejects_missing_mismatched_and_expired_tokens(client):
     client.cookies.clear()
     client.cookies.set(CSRF_COOKIE_NAME, expired_token)
     expired = client.post(
-        "/auth/login",
+        "/api/auth/login",
         json={"username": "unknown.user", "password": "wrong"},
         headers={"Origin": ALLOWED_ORIGIN, "X-CSRF-Token": expired_token},
     )
@@ -354,7 +354,7 @@ def test_csrf_rejects_disallowed_origin_on_signup(client):
     valid_headers["Origin"] = "https://not-allowed.example"
 
     response = client.post(
-        "/auth/signup",
+        "/api/auth/signup",
         json=_signup_payload(),
         headers=valid_headers,
     )
@@ -364,7 +364,7 @@ def test_csrf_rejects_disallowed_origin_on_signup(client):
 
 def test_cors_preflight_allows_only_required_headers_for_exact_origin(client):
     response = client.options(
-        "/auth/login",
+        "/api/auth/login",
         headers={
             "Origin": ALLOWED_ORIGIN,
             "Access-Control-Request-Method": "POST",
@@ -385,7 +385,7 @@ def test_logout_clears_access_and_csrf_cookies(client, db_session):
     assert _login(client).status_code == 200
     headers = _csrf_headers(client)
 
-    response = client.post("/auth/logout", headers=headers)
+    response = client.post("/api/auth/logout", headers=headers)
 
     assert response.status_code == 204
     cleared_cookies = [cookie.lower() for cookie in response.headers.get_list("set-cookie")]

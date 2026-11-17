@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
-from app.core.database import engine
+from app.database import engine
 
 
 def _expect_integrity_error(connection, statement: str, values: dict[str, object]) -> None:

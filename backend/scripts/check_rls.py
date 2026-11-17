@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
-from app.core.database import engine
+from app.database import engine
 
 TABLES = (
     "societies",

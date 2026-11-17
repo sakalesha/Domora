@@ -8,8 +8,8 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.config import ACCESS_COOKIE_NAME
-from app.core.database import get_db
+from app.config import ACCESS_COOKIE_NAME
+from app.database import get_db
 from app.core.security import decode_access_token
 from app.models.domain import User
 
@@ -64,3 +64,8 @@ def require_role(required_role: UserRole) -> Callable[..., User]:
         return current_user
 
     return role_dependency
+
+
+require_ops_user = require_role("ops")
+require_vendor_user = require_role("vendor")
+require_resident_user = require_role("resident")

@@ -1,7 +1,7 @@
 import pytest
 from fastapi import FastAPI
 
-from app.core.config import ACCESS_TOKEN_EXPIRE_MINUTES, validate_runtime_config
+from app.config import ACCESS_TOKEN_EXPIRE_MINUTES, validate_runtime_config
 from app.main import create_app
 
 

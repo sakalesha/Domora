@@ -94,32 +94,32 @@ def _valid_camp_payload(society_id: str, service_id: str, vendor_id: str | None 
 
 
 def test_unauthenticated_request_rejected(client):
-    response = client.get("/ops/camps")
+    response = client.get("/api/ops/camps")
     assert response.status_code == 401
 
 
 def test_resident_role_forbidden(client, db_session):
     society = _create_society(db_session)
     resident = _create_user(db_session, username="resident_user", role="resident", society_id=society.id, unit_label="A-101")
-    response = client.get("/ops/camps", headers=_auth_headers(resident))
+    response = client.get("/api/ops/camps", headers=_auth_headers(resident))
     assert response.status_code == 403
 
 
 def test_vendor_role_forbidden(client, db_session):
     vendor = _create_user(db_session, username="vendor_user", role="vendor")
-    response = client.get("/ops/camps", headers=_auth_headers(vendor))
+    response = client.get("/api/ops/camps", headers=_auth_headers(vendor))
     assert response.status_code == 403
 
 
 def test_inactive_ops_rejected(client, db_session):
     ops_user = _create_user(db_session, username="inactive_ops", role="ops", is_active=False)
-    response = client.get("/ops/camps", headers=_auth_headers(ops_user))
+    response = client.get("/api/ops/camps", headers=_auth_headers(ops_user))
     assert response.status_code == 401
 
 
 def test_ops_role_authorized(client, db_session):
     ops_user = _create_user(db_session, username="active_ops", role="ops")
-    response = client.get("/ops/camps", headers=_auth_headers(ops_user))
+    response = client.get("/api/ops/camps", headers=_auth_headers(ops_user))
     assert response.status_code == 200
     assert response.json() == []
 
@@ -139,17 +139,17 @@ def test_reference_endpoints(client, db_session):
     headers = _auth_headers(ops_user)
 
     # Societies
-    soc_resp = client.get("/ops/societies", headers=headers)
+    soc_resp = client.get("/api/ops/societies", headers=headers)
     assert soc_resp.status_code == 200
     assert any(s["id"] == society.id for s in soc_resp.json())
 
     # Services
-    srv_resp = client.get("/ops/services", headers=headers)
+    srv_resp = client.get("/api/ops/services", headers=headers)
     assert srv_resp.status_code == 200
     assert any(s["id"] == service.id for s in srv_resp.json())
 
     # Vendors (only active)
-    ven_resp = client.get("/ops/vendors", headers=headers)
+    ven_resp = client.get("/api/ops/vendors", headers=headers)
     assert ven_resp.status_code == 200
     vendors = ven_resp.json()
     assert any(v["id"] == vendor.id for v in vendors)
@@ -168,7 +168,7 @@ def test_create_camp_happy_path(client, db_session):
     vendor = _create_user(db_session, username="assigned_vendor", role="vendor")
 
     payload = _valid_camp_payload(society.id, service.id, vendor.id)
-    response = client.post("/ops/camps", json=payload, headers=_auth_headers(ops_user))
+    response = client.post("/api/ops/camps", json=payload, headers=_auth_headers(ops_user))
 
     assert response.status_code == 201
     data = response.json()
@@ -197,7 +197,7 @@ def test_create_camp_without_vendor(client, db_session):
     service = _create_service(db_session)
 
     payload = _valid_camp_payload(society.id, service.id, None)
-    response = client.post("/ops/camps", json=payload, headers=_auth_headers(ops_user))
+    response = client.post("/api/ops/camps", json=payload, headers=_auth_headers(ops_user))
 
     assert response.status_code == 201
     assert response.json()["vendor"] is None
@@ -212,7 +212,7 @@ def test_create_camp_invalid_window_ends_before_starts(client, db_session):
     # Swap starts_at and ends_at
     payload["starts_at"], payload["ends_at"] = payload["ends_at"], payload["starts_at"]
 
-    response = client.post("/ops/camps", json=payload, headers=_auth_headers(ops_user))
+    response = client.post("/api/ops/camps", json=payload, headers=_auth_headers(ops_user))
     assert response.status_code == 400
     assert "starts_at must be strictly before ends_at" in response.json()["detail"]
 
@@ -227,7 +227,7 @@ def test_create_camp_deadline_less_than_24h_before_start(client, db_session):
     starts_dt = datetime.fromisoformat(payload["starts_at"])
     payload["join_deadline"] = (starts_dt - timedelta(hours=10)).isoformat()
 
-    response = client.post("/ops/camps", json=payload, headers=_auth_headers(ops_user))
+    response = client.post("/api/ops/camps", json=payload, headers=_auth_headers(ops_user))
     assert response.status_code == 400
     assert "at least 24 hours before starts_at" in response.json()["detail"]
 
@@ -241,7 +241,7 @@ def test_create_camp_max_participants_exceeds_capacity(client, db_session):
     # Capacity is 12 slots; set max to 15
     payload["max_participants"] = 15
 
-    response = client.post("/ops/camps", json=payload, headers=_auth_headers(ops_user))
+    response = client.post("/api/ops/camps", json=payload, headers=_auth_headers(ops_user))
     assert response.status_code == 400
     assert "cannot exceed capacity" in response.json()["detail"]
 
@@ -258,7 +258,7 @@ def test_create_camp_invalid_tiers_duplicate_or_decreasing(client, db_session):
         {"min_participants": 6, "discount_pct": 10},
     ]
 
-    response = client.post("/ops/camps", json=payload, headers=_auth_headers(ops_user))
+    response = client.post("/api/ops/camps", json=payload, headers=_auth_headers(ops_user))
     assert response.status_code == 400
     assert "strictly increase" in response.json()["detail"]
 
@@ -275,7 +275,7 @@ def test_create_camp_tier_exceeds_max_participants(client, db_session):
         {"min_participants": 10, "discount_pct": 20},  # 10 > 8
     ]
 
-    response = client.post("/ops/camps", json=payload, headers=_auth_headers(ops_user))
+    response = client.post("/api/ops/camps", json=payload, headers=_auth_headers(ops_user))
     assert response.status_code == 400
     assert "cannot exceed max_participants" in response.json()["detail"]
 
@@ -288,17 +288,17 @@ def test_create_camp_nonexistent_foreign_keys(client, db_session):
 
     # Invalid society
     payload1 = _valid_camp_payload(fake_id, service.id)
-    r1 = client.post("/ops/camps", json=payload1, headers=_auth_headers(ops_user))
+    r1 = client.post("/api/ops/camps", json=payload1, headers=_auth_headers(ops_user))
     assert r1.status_code == 404
 
     # Invalid service
     payload2 = _valid_camp_payload(society.id, fake_id)
-    r2 = client.post("/ops/camps", json=payload2, headers=_auth_headers(ops_user))
+    r2 = client.post("/api/ops/camps", json=payload2, headers=_auth_headers(ops_user))
     assert r2.status_code == 404
 
     # Invalid vendor
     payload3 = _valid_camp_payload(society.id, service.id, fake_id)
-    r3 = client.post("/ops/camps", json=payload3, headers=_auth_headers(ops_user))
+    r3 = client.post("/api/ops/camps", json=payload3, headers=_auth_headers(ops_user))
     assert r3.status_code == 404
 
 
@@ -309,7 +309,7 @@ def test_create_camp_with_resident_as_vendor_rejected(client, db_session):
     resident = _create_user(db_session, username="resident_wrong", role="resident", society_id=society.id, unit_label="B-202")
 
     payload = _valid_camp_payload(society.id, service.id, resident.id)
-    response = client.post("/ops/camps", json=payload, headers=_auth_headers(ops_user))
+    response = client.post("/api/ops/camps", json=payload, headers=_auth_headers(ops_user))
     assert response.status_code == 404
     assert "Vendor" in response.json()["detail"]
 
@@ -327,29 +327,29 @@ def test_list_camps_filtering(client, db_session):
 
     # Create camp in soc1
     p1 = _valid_camp_payload(soc1.id, srv.id)
-    c1 = client.post("/ops/camps", json=p1, headers=_auth_headers(ops_user)).json()
+    c1 = client.post("/api/ops/camps", json=p1, headers=_auth_headers(ops_user)).json()
 
     # Create camp in soc2
     p2 = _valid_camp_payload(soc2.id, srv.id)
-    c2 = client.post("/ops/camps", json=p2, headers=_auth_headers(ops_user)).json()
+    c2 = client.post("/api/ops/camps", json=p2, headers=_auth_headers(ops_user)).json()
 
     # Unfiltered
-    all_resp = client.get("/ops/camps", headers=_auth_headers(ops_user))
+    all_resp = client.get("/api/ops/camps", headers=_auth_headers(ops_user))
     assert all_resp.status_code == 200
     assert len(all_resp.json()) == 2
 
     # Filter by society
-    soc1_resp = client.get(f"/ops/camps?society_id={soc1.id}", headers=_auth_headers(ops_user))
+    soc1_resp = client.get(f"/api/ops/camps?society_id={soc1.id}", headers=_auth_headers(ops_user))
     assert soc1_resp.status_code == 200
     assert len(soc1_resp.json()) == 1
     assert soc1_resp.json()[0]["id"] == c1["id"]
 
     # Filter by status
-    open_resp = client.get("/ops/camps?status=open", headers=_auth_headers(ops_user))
+    open_resp = client.get("/api/ops/camps?status=open", headers=_auth_headers(ops_user))
     assert open_resp.status_code == 200
     assert len(open_resp.json()) == 2
 
-    confirmed_resp = client.get("/ops/camps?status=confirmed", headers=_auth_headers(ops_user))
+    confirmed_resp = client.get("/api/ops/camps?status=confirmed", headers=_auth_headers(ops_user))
     assert confirmed_resp.status_code == 200
     assert len(confirmed_resp.json()) == 0
 
@@ -365,7 +365,7 @@ def test_get_camp_detail_with_participants(client, db_session):
     service = _create_service(db_session)
 
     payload = _valid_camp_payload(society.id, service.id)
-    created_camp = client.post("/ops/camps", json=payload, headers=_auth_headers(ops_user)).json()
+    created_camp = client.post("/api/ops/camps", json=payload, headers=_auth_headers(ops_user)).json()
     camp_id = created_camp["id"]
 
     # Add 3 active bookings and 1 cancelled booking
@@ -394,7 +394,7 @@ def test_get_camp_detail_with_participants(client, db_session):
     db_session.commit()
 
     # Fetch camp detail
-    detail_resp = client.get(f"/ops/camps/{camp_id}", headers=_auth_headers(ops_user))
+    detail_resp = client.get(f"/api/ops/camps/{camp_id}", headers=_auth_headers(ops_user))
     assert detail_resp.status_code == 200
     detail = detail_resp.json()
 
@@ -413,7 +413,7 @@ def test_get_camp_detail_with_participants(client, db_session):
     assert [p["unit_label"] for p in detail["participants"]] == ["A-101", "A-201", "A-301"]
 
     # Also check list_camps reflects active count
-    list_resp = client.get("/ops/camps", headers=_auth_headers(ops_user))
+    list_resp = client.get("/api/ops/camps", headers=_auth_headers(ops_user))
     camp_item = list_resp.json()[0]
     assert camp_item["active_participants_count"] == 3
     assert camp_item["spots_remaining"] == 9  # 12 - 3
@@ -434,13 +434,13 @@ def test_assign_and_unassign_vendor(client, db_session):
 
     # Create camp with no vendor
     payload = _valid_camp_payload(society.id, service.id, None)
-    camp = client.post("/ops/camps", json=payload, headers=_auth_headers(ops_user)).json()
+    camp = client.post("/api/ops/camps", json=payload, headers=_auth_headers(ops_user)).json()
     camp_id = camp["id"]
     assert camp["vendor"] is None
 
     # Assign vendor 1
     r1 = client.patch(
-        f"/ops/camps/{camp_id}/vendor",
+        f"/api/ops/camps/{camp_id}/vendor",
         json={"vendor_id": vendor1.id},
         headers=_auth_headers(ops_user),
     )
@@ -449,7 +449,7 @@ def test_assign_and_unassign_vendor(client, db_session):
 
     # Switch to vendor 2
     r2 = client.patch(
-        f"/ops/camps/{camp_id}/vendor",
+        f"/api/ops/camps/{camp_id}/vendor",
         json={"vendor_id": vendor2.id},
         headers=_auth_headers(ops_user),
     )
@@ -458,7 +458,7 @@ def test_assign_and_unassign_vendor(client, db_session):
 
     # Unassign (set to None)
     r3 = client.patch(
-        f"/ops/camps/{camp_id}/vendor",
+        f"/api/ops/camps/{camp_id}/vendor",
         json={"vendor_id": None},
         headers=_auth_headers(ops_user),
     )
@@ -473,11 +473,11 @@ def test_assign_invalid_vendor_rejected(client, db_session):
     resident = _create_user(db_session, username="resident_not_vendor", role="resident", society_id=society.id, unit_label="D-404")
 
     payload = _valid_camp_payload(society.id, service.id, None)
-    camp = client.post("/ops/camps", json=payload, headers=_auth_headers(ops_user)).json()
+    camp = client.post("/api/ops/camps", json=payload, headers=_auth_headers(ops_user)).json()
 
     # Assign non-vendor user
     r = client.patch(
-        f"/ops/camps/{camp['id']}/vendor",
+        f"/api/ops/camps/{camp['id']}/vendor",
         json={"vendor_id": resident.id},
         headers=_auth_headers(ops_user),
     )
