@@ -282,6 +282,18 @@ def test_csrf_requires_an_allowed_origin(client):
     assert disallowed_origin.status_code == 403
 
 
+def test_csrf_allows_browser_same_origin_get_without_origin_header(client):
+    # Modern browsers omit the Origin header on same-origin GET requests,
+    # sending Sec-Fetch-Site: same-origin or Referer with matching host.
+    response_sec_fetch = client.get("/auth/csrf", headers={"Sec-Fetch-Site": "same-origin"})
+    assert response_sec_fetch.status_code == 200
+    assert "csrf_token" in response_sec_fetch.json()
+
+    response_referer = client.get("/auth/csrf", headers={"Referer": "http://testserver/login"})
+    assert response_referer.status_code == 200
+    assert "csrf_token" in response_referer.json()
+
+
 def test_csrf_cookie_is_http_only_signed_and_reused(client):
     first = client.get("/auth/csrf", headers={"Origin": ALLOWED_ORIGIN})
     token = first.json()["csrf_token"]

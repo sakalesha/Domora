@@ -65,11 +65,40 @@ def is_valid_csrf_token(token: str, *, now: int | None = None) -> bool:
 
 def require_allowed_origin(request: Request) -> None:
     origin = request.headers.get("origin")
-    if origin is None or origin not in CORS_ALLOWED_ORIGINS:
+    if origin is not None:
+        origin_clean = origin.rstrip("/")
+        if origin_clean in CORS_ALLOWED_ORIGINS or any(origin_clean == o.rstrip("/") for o in CORS_ALLOWED_ORIGINS):
+            return
+
+        # Check against host / x-forwarded-host for same-origin requests
+        forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+        forwarded_proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+        if forwarded_host:
+            same_origin = f"{forwarded_proto}://{forwarded_host}".rstrip("/")
+            if origin_clean == same_origin:
+                return
+
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Request could not be completed",
         )
+
+    # Origin header is omitted:
+    # Browsers omit the Origin header on same-origin GET/HEAD requests.
+    # We verify it is truly a same-origin browser request via Sec-Fetch-Site or Referer.
+    if request.method in {"GET", "HEAD"}:
+        sec_fetch_site = request.headers.get("sec-fetch-site")
+        if sec_fetch_site in {"same-origin", "none", "same-site"}:
+            return
+        forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+        referer = request.headers.get("referer")
+        if referer and forwarded_host and forwarded_host in referer:
+            return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Request could not be completed",
+    )
 
 
 def require_csrf(request: Request) -> None:

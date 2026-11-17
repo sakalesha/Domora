@@ -20,16 +20,27 @@ APP_ENV = os.getenv("APP_ENV", "development")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
 ACCESS_COOKIE_NAME = "domora_access"
 CSRF_TOKEN_EXPIRE_SECONDS = 24 * 60 * 60
-CORS_ALLOWED_ORIGINS = tuple(
-    dict.fromkeys(
-        origin.strip()
-        for origin in os.getenv(
-            "CORS_ALLOWED_ORIGINS",
-            "http://localhost:5173,http://localhost:3000",
-        ).split(",")
-        if origin.strip()
-    )
-)
+
+_raw_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:5173,http://localhost:3000",
+    ).split(",")
+    if origin.strip()
+]
+
+# Automatically allow Vercel deployment origins if deployed on Vercel
+for _vercel_env_key in ("VERCEL_URL", "VERCEL_PROJECT_PRODUCTION_URL"):
+    _val = os.getenv(_vercel_env_key)
+    if _val:
+        _clean_val = _val.strip()
+        if not _clean_val.startswith("http"):
+            _raw_origins.append(f"https://{_clean_val}")
+        else:
+            _raw_origins.append(_clean_val)
+
+CORS_ALLOWED_ORIGINS = tuple(dict.fromkeys(_raw_origins))
 
 
 def _is_exact_origin(origin: str) -> bool:
