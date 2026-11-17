@@ -73,6 +73,12 @@ def require_allowed_origin(request: Request) -> None:
 
 
 def require_csrf(request: Request) -> None:
+    # Requests authenticated explicitly via Authorization: Bearer <token>
+    # are immune to browser ambient-credential CSRF attacks.
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        return
+
     require_allowed_origin(request)
     header_token = request.headers.get(CSRF_HEADER_NAME)
     cookie_token = request.cookies.get(CSRF_COOKIE_NAME)

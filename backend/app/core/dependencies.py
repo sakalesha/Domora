@@ -29,7 +29,11 @@ def get_current_user(
 ) -> User:
     token = request.cookies.get(ACCESS_COOKIE_NAME)
     if token is None:
-        raise _unauthorized()
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.removeprefix("Bearer ").strip()
+        else:
+            raise _unauthorized()
 
     try:
         claims = decode_access_token(token)
