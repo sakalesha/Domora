@@ -42,8 +42,8 @@ export class SignupLoginError extends Error {
   }
 }
 
-interface ApiRequestOptions {
-  method?: 'GET' | 'POST'
+export interface ApiRequestOptions {
+  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   body?: unknown
   csrfToken?: string
   authenticated?: boolean
@@ -60,7 +60,7 @@ export function registerSessionExpiredHandler(handler: () => void): () => void {
   }
 }
 
-async function apiRequest(
+export async function apiRequest(
   path: string,
   options: ApiRequestOptions = {},
 ): Promise<unknown> {

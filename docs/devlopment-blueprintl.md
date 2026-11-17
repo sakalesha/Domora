@@ -166,11 +166,24 @@ Explain-back: Why integer paise and a fixed rounding rule? Why write tests befor
 **Objective:** the heart of the product: camps and bookings that stay correct under concurrent use.
 
 Sub-phases:
-- **4a Ops camp management:** create a camp with tiers, assign a vendor, list and view camps with participants.
-- **4b Resident camp views:** only the resident's own society; computed fields: participants, spots left, provisional current price, next tier and neighbours needed.
-- **4c Join and leave:** rules 1, 2, 3 and 9 from the design (one active booking, capacity, society isolation, deadline); leave is allowed up to 24 hours before the window; ops may cancel any time.
-- **4d Confirm and cancel camp:** confirm needs enough participants and a vendor; it computes the final price once, applies it to everyone, assigns consecutive time slots in join order, and moves bookings to "scheduled"; cancel needs a reason and cancels all active bookings.
-- **4e Derived transitions:** when every participant cancels a confirmed camp, the camp is cancelled; when every booking is completed, the camp is completed.
+- **[x] 4a Ops camp management:** create a camp with tiers, assign a vendor, list and view camps with participants. Full-stack complete:
+  - **Backend Implementation:**
+    - Schemas (`backend/app/api/ops_schemas.py`): Pydantic v2 input and output models with `extra="forbid"` (`CampCreateRequest`, `PriceTierInput`, `CampAssignVendorRequest`, `CampListItemResponse`, `CampDetailResponse`, `ParticipantSummary`, `PricingQuoteResponse`, `SocietyReferenceResponse`, `ServiceReferenceResponse`, `VendorReferenceResponse`).
+    - Domain Service (`backend/app/services/camp_ops.py`): Atomic database operations for `create_camp` (validating window capacity, minimum 24h lead time, and ascending tiers), `list_camps` (dynamic active booking counts, capacity fill, provisional price calculation via `calculate_pricing_quote`), `get_camp_detail` (roster in join order, tentative/scheduled slot times, next-tier pricing quote), `assign_vendor` (role validation and assignment), and reference lookups (`list_societies`, `list_services`, `list_vendors`).
+    - API Router (`backend/app/api/ops.py` & `backend/app/api/router.py`): RESTful endpoints mounted at `/ops` and `/api/ops` guarded by `require_role("ops")`: `POST /ops/camps`, `GET /ops/camps`, `GET /ops/camps/{id}`, `PATCH /ops/camps/{id}/vendor`, `GET /ops/references/societies`, `GET /ops/references/services`, `GET /ops/references/vendors`.
+    - Tests (`backend/tests/test_camp_ops.py`): 19 comprehensive unit & integration tests covering positive/negative validation, tier constraints, role security (403 for resident/vendor), active booking calculations, and vendor assignments (132 total backend tests passing).
+  - **Frontend Implementation & UI/UX Upgrades:**
+    - App Shell & Navigation (`frontend/src/components/ops/OpsLayout.tsx` & `frontend/src/components/icons/Icons.tsx`): Shared operational layout with responsive sidebar, mobile drawer, breadcrumbs navigation trail, live environment pill, attention count badge, and custom SVG icon library (replacing consumer emojis).
+    - Typed API Client (`frontend/src/api/ops.ts`): Type-safe client functions with CSRF token injection for mutating endpoints (`createCamp`, `assignVendor`, `listCamps`, `getCampDetail`, reference loaders).
+    - Status & Urgency Badges (`frontend/src/components/ops/CampStatusBadge.tsx`): 5-state status badge (`open` Emerald, `confirmed` Teal, `in_progress` Sky Blue, `completed` Purple, `cancelled` Rose), disentangling `confirmed` from Amber; dedicated `RiskBadge` for Critical (<24h to deadline & below min) and Warning (<72h or unassigned vendor) states.
+    - Ops Dashboard (`frontend/src/pages/ops/OpsDashboardPage.tsx`): Operational KPI summary cards (Active Camps, Needs Attention, Total Bookings, Active Societies), status filter tabs with badge counts, search & society filters, dense sortable table view (default) with compact progress meters and minimum-participant notch markers (`w-0.5 bg-ink`), plus card grid toggle.
+    - Create Camp (`frontend/src/pages/ops/CreateCampPage.tsx`): 2-column desktop architecture with structured form sections on the left, sticky live stepped pricing preview ladder on the right, live window slot capacity calculator with leftover minute alerts (`+15m buffer`), and a pre-launch confirmation review modal with resident visibility notice before going live as `open`.
+    - Camp Detail & Roster (`frontend/src/pages/ops/CampDetailPage.tsx`): Unified multi-milestone progress meter with min-confirmation notch and tier milestones, sub-tabbed triage interface (`Roster & Visits`, `Overview & Schedule`, `Group Tiers`), participant roster with scheduled visit times, join sequence, unit numbers, phone links, and an interactive vendor assignment modal.
+    - Route Wiring (`frontend/src/App.tsx`): Wired role-guarded `/ops`, `/ops/camps`, `/ops/camps/new`, and `/ops/camps/:campId` routes.
+- **[ ] 4b Resident camp views:** only the resident's own society; computed fields: participants, spots left, provisional current price, next tier and neighbours needed.
+- **[ ] 4c Join and leave:** rules 1, 2, 3 and 9 from the design (one active booking, capacity, society isolation, deadline); leave is allowed up to 24 hours before the window; ops may cancel any time.
+- **[ ] 4d Confirm and cancel camp:** confirm needs enough participants and a vendor; it computes the final price once, applies it to everyone, assigns consecutive time slots in join order, and moves bookings to "scheduled"; cancel needs a reason and cancels all active bookings.
+- **[ ] 4e Derived transitions:** when every participant cancels a confirmed camp, the camp is cancelled; when every booking is completed, the camp is completed.
 
 DECISION GATE before 4b: risk R1 (provisional price can rise if neighbours leave before confirmation). Choose: label-only warning, or a guaranteed price floor. Record it in the decision log.
 
@@ -211,7 +224,7 @@ Sub-phases:
 - **6a Foundation (1 to 1.5 days):** project setup, routing, an API client layer, auth state, role-based route guards, consistent loading and error states. Decide where the token is stored and know the trade-offs (decision P5).
 - **6b Resident (2 to 2.5 days):** signup with invite code, login, camp list with tier progress ("3 more neighbours for 15% off"), camp detail with Join and Leave, My bookings with status, time, price and photos. Label the price "current price" while the camp is open and "your price" only once locked.
 - **6c Vendor (1.5 to 2 days):** jobs in time order, start and complete with camera upload on a phone-sized screen.
-- **6d Ops (1.5 to 2 days):** camp table, create-camp form with tiers, camp detail with assign vendor, participants, Confirm and Cancel.
+- **[x] 6d Ops (Implemented in 4a):** camp table & card triage, create-camp form with tiers and live preview ladder, camp detail with assigned vendor and participant roster. (Built in Sub-Phase 4a; lifecycle mutations Confirm and Cancel execute in 4d).
 
 Rules: plain and functional first; no styling rabbit holes (timebox styling to a fixed slice of each sub-phase); handle every API error status visibly; keep ops screens minimal.
 Common traps: treating frontend route guards as security; CORS errors late in the project; forgetting token expiry handling; building ops UI too fancy.
@@ -345,7 +358,7 @@ Pending (decide at the phase shown):
 | 1 Data model | Complete | 2026-11-15 | 2026-11-15 | Yes | Postgres migration round-trip, constraints, RLS, and public API verified; digital ERD used instead of paper exercise. |
 | 2 Auth and roles | Complete | 2026-11-16 | 2026-11-16 | Yes | Full-stack auth complete (FastAPI backend + Vite React frontend). 50 backend tests pass; frontend lint and build pass. Welcome, Login, Signup, role routing, HttpOnly cookies + CSRF tokens, and Vercel Services deployment configured. |
 | 3 Pricing and camp rules | Complete | 2026-11-17 | 2026-11-17 | Yes | Pure domain functions for pricing and camp rules implemented using TDD. Integer paise arithmetic with ROUND_HALF_UP. 63 dedicated tests passing (113 backend tests total). Demo numbers verified (3: Rs 720, 6: Rs 680, 10: Rs 640). |
-| 4 Camp lifecycle and bookings | Not started | | | | |
+| 4 Camp lifecycle and bookings | In progress (4a complete) | 2026-11-17 | | Yes | Sub-phase 4a (Ops camp management) complete full-stack. Backend service (`camp_ops`), API (`/ops/camps`, `/ops/vendors`, etc.), 19 automated tests (132 total backend tests passing), and Ops UI dashboard, camp creation with dynamic tiers, and camp detail view. |
 | 5 Vendor flow and photos | Not started | | | | |
 | 6 Frontend | Not started | | | | |
 | 7 Seed, deploy, document | Not started | | | | |

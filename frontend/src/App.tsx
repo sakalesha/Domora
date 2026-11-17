@@ -6,9 +6,11 @@ import type { UserRole } from './auth/types'
 import { useAuth } from './auth/useAuth'
 import { LoadingScreen } from './components/LoadingScreen'
 import { LoginPage } from './pages/LoginPage'
+import { CampDetailPage } from './pages/ops/CampDetailPage'
+import { CreateCampPage } from './pages/ops/CreateCampPage'
+import { OpsDashboardPage } from './pages/ops/OpsDashboardPage'
 import { RoleHomePage } from './pages/RoleHomePage'
 import { SignupPage } from './pages/SignupPage'
-
 import { WelcomePage } from './pages/WelcomePage'
 
 interface PublicOnlyProps {
@@ -17,6 +19,7 @@ interface PublicOnlyProps {
 
 interface RoleRouteProps {
   role: UserRole
+  children?: ReactNode
 }
 
 function HomeRoute() {
@@ -52,7 +55,7 @@ function PublicOnly({ children }: PublicOnlyProps) {
   return children
 }
 
-function ProtectedRole({ role }: RoleRouteProps) {
+function ProtectedRole({ role, children }: RoleRouteProps) {
   const { auth } = useAuth()
   if (auth.status === 'loading') {
     return <LoadingScreen />
@@ -63,7 +66,7 @@ function ProtectedRole({ role }: RoleRouteProps) {
   if (auth.user.role !== role) {
     return <Navigate replace to={roleHomePath(auth.user.role)} />
   }
-  return <RoleHomePage />
+  return children ? <>{children}</> : <RoleHomePage />
 }
 
 function App() {
@@ -96,7 +99,38 @@ function App() {
       />
       <Route element={<ProtectedRole role="resident" />} path="/resident" />
       <Route element={<ProtectedRole role="vendor" />} path="/vendor" />
-      <Route element={<ProtectedRole role="ops" />} path="/ops" />
+      <Route
+        element={
+          <ProtectedRole role="ops">
+            <OpsDashboardPage />
+          </ProtectedRole>
+        }
+        path="/ops"
+      />
+      <Route
+        element={
+          <ProtectedRole role="ops">
+            <OpsDashboardPage />
+          </ProtectedRole>
+        }
+        path="/ops/camps"
+      />
+      <Route
+        element={
+          <ProtectedRole role="ops">
+            <CreateCampPage />
+          </ProtectedRole>
+        }
+        path="/ops/camps/new"
+      />
+      <Route
+        element={
+          <ProtectedRole role="ops">
+            <CampDetailPage />
+          </ProtectedRole>
+        }
+        path="/ops/camps/:campId"
+      />
       <Route element={<HomeRedirect />} path="*" />
     </Routes>
   )
