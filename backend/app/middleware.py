@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
-from app.config import CORS_ALLOWED_ORIGINS
+from app.config import CORS_ALLOW_ALL, CORS_ALLOWED_ORIGINS
 
 
 class ProcessTimeMiddleware(BaseHTTPMiddleware):
@@ -21,13 +21,24 @@ class ProcessTimeMiddleware(BaseHTTPMiddleware):
 
 def setup_cors_middleware(app: FastAPI) -> None:
     """Configure CORS middleware with validated origins."""
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=list(CORS_ALLOWED_ORIGINS),
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "X-CSRF-Token", "Authorization"],
-    )
+    if CORS_ALLOW_ALL:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origin_regex=r".*",
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+            allow_headers=["*"],
+            expose_headers=["*"],
+        )
+    else:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(CORS_ALLOWED_ORIGINS),
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+            allow_headers=["Content-Type", "X-CSRF-Token", "Authorization"],
+            expose_headers=["X-Access-Token", "X-CSRF-Token", "X-Process-Time"],
+        )
 
 
 def setup_custom_middleware(app: FastAPI) -> None:

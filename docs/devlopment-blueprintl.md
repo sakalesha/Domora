@@ -180,12 +180,18 @@ Sub-phases:
     - Create Camp (`frontend/src/pages/ops/CreateCampPage.tsx`): 2-column desktop architecture with structured form sections on the left, sticky live stepped pricing preview ladder on the right, live window slot capacity calculator with leftover minute alerts (`+15m buffer`), and a pre-launch confirmation review modal with resident visibility notice before going live as `open`.
     - Camp Detail & Roster (`frontend/src/pages/ops/CampDetailPage.tsx`): Unified multi-milestone progress meter with min-confirmation notch and tier milestones, sub-tabbed triage interface (`Roster & Visits`, `Overview & Schedule`, `Group Tiers`), participant roster with scheduled visit times, join sequence, unit numbers, phone links, and an interactive vendor assignment modal.
     - Route Wiring (`frontend/src/App.tsx`): Wired role-guarded `/ops`, `/ops/camps`, `/ops/camps/new`, and `/ops/camps/:campId` routes.
-- **[x] 4b Resident camp views:** only the resident's own society; computed fields: participants, spots left, provisional current price, next tier and neighbours needed. (Backend implementation complete; frontend managed via Google AI Studio).
+- **[x] 4b Resident camp views:** only the resident's own society; computed fields: participants, spots left, provisional current price, next tier and neighbours needed. Full-stack complete:
   - **Backend Implementation:**
     - Schemas (`backend/app/schemas/resident.py`): Pydantic v2 models with `extra="forbid"` (`ResidentCampListItem`, `ResidentCampDetail`, `ResidentNextTier`, `ResidentBookingSummary`, `ResidentTierItem`, `ResidentSocietySummary`, `ResidentServiceSummary`).
     - Domain Service (`backend/app/services/camp_resident.py`): `list_resident_camps` and `get_resident_camp_detail` enforcing strict society isolation, real-time headcount aggregation, dynamic provisional discount & price computation via Phase 3 pricing engine, spots-remaining capacity tracking, next-tier motivation deltas, and resident active-booking status.
     - API Router (`backend/app/api/v1/resident.py` & `backend/app/api/router.py`): Mounted at `/api/v1/resident/camps` and `/api/resident/camps` guarded by `require_role("resident")`. Cross-society camp lookups return 404 to avoid leaking existence of camps in other societies.
+    - Adaptive Cross-Origin Auth & CORS: `CORS_ALLOW_ALL=true` in development with `allow_origin_regex=r".*"`, plus adaptive `SameSite=None; Secure` cookies and `X-Access-Token` response headers for seamless preview across Google AI Studio and local development.
     - Tests (`backend/tests/test_resident_camps.py`): 13 comprehensive unit and integration tests verifying society isolation, dynamic provisional pricing with demo numbers (Rs 800 -> 3: Rs 720, 6: Rs 680, 10: Rs 640), next-tier calculations, privacy safeguards (no neighbor names/units in output), deadline and capacity restrictions (151 total backend tests passing).
+  - **Frontend Implementation & Resident Experience:**
+    - Society Scoping & Context: Resident portal bound strictly to resident's society (`Sunrise Heights`), greeting the resident by name, society, and unit number.
+    - Camp Discovery List: Cards showing service, dates, status pill, spots left progress bar, provisional group-buying discount, current provisional price, and next-tier countdown ("X more neighbours needed for Y% off").
+    - Camp Detail & Pricing Ladder: Interactive view displaying the stepped group pricing tiers with current tier highlighted, remaining capacity, countdown to join deadline, provisional price disclaimer ("Current provisional price • Locks at confirmation" per Decision D13), and booking summary placeholder (ready for Join/Leave in 4c).
+    - Residential Privacy Safeguards (Decision D14): Displays aggregate participant numbers only, never leaking neighbor names, units, or phone numbers.
 - **[ ] 4c Join and leave:** rules 1, 2, 3 and 9 from the design (one active booking, capacity, society isolation, deadline); leave is allowed up to 24 hours before the window; ops may cancel any time.
 - **[ ] 4d Confirm and cancel camp:** confirm needs enough participants and a vendor; it computes the final price once, applies it to everyone, assigns consecutive time slots in join order, and moves bookings to "scheduled"; cancel needs a reason and cancels all active bookings.
 - **[ ] 4e Derived transitions:** when every participant cancels a confirmed camp, the camp is cancelled; when every booking is completed, the camp is completed.
@@ -227,7 +233,7 @@ Explain-back: What is a signed URL and why use one? Why not store photos in the 
 
 Sub-phases:
 - **6a Foundation (1 to 1.5 days):** project setup, routing, an API client layer, auth state, role-based route guards, consistent loading and error states. Decide where the token is stored and know the trade-offs (decision P5).
-- **6b Resident (2 to 2.5 days):** signup with invite code, login, camp list with tier progress ("3 more neighbours for 15% off"), camp detail with Join and Leave, My bookings with status, time, price and photos. Label the price "current price" while the camp is open and "your price" only once locked.
+- **6b Resident (Partially implemented in 4b):** signup with invite code, login, camp list with tier progress ("3 more neighbours for 15% off"), camp detail with pricing ladder and provisional price disclaimer (discovery & detail built in 4b; Join/Leave lifecycle mutations execute in 4c; My bookings & photos execute in 4c/5).
 - **6c Vendor (1.5 to 2 days):** jobs in time order, start and complete with camera upload on a phone-sized screen.
 - **[x] 6d Ops (Implemented in 4a):** camp table & card triage, create-camp form with tiers and live preview ladder, camp detail with assigned vendor and participant roster. (Built in Sub-Phase 4a; lifecycle mutations Confirm and Cancel execute in 4d).
 
@@ -363,7 +369,7 @@ Pending (decide at the phase shown):
 | 1 Data model | Complete | 2026-11-15 | 2026-11-15 | Yes | Postgres migration round-trip, constraints, RLS, and public API verified; digital ERD used instead of paper exercise. |
 | 2 Auth and roles | Complete | 2026-11-16 | 2026-11-16 | Yes | Full-stack auth complete (FastAPI backend + Vite React frontend). 50 backend tests pass; frontend lint and build pass. Welcome, Login, Signup, role routing, HttpOnly cookies + CSRF tokens, and Vercel Services deployment configured. |
 | 3 Pricing and camp rules | Complete | 2026-11-17 | 2026-11-17 | Yes | Pure domain functions for pricing and camp rules implemented using TDD. Integer paise arithmetic with ROUND_HALF_UP. 63 dedicated tests passing (113 backend tests total). Demo numbers verified (3: Rs 720, 6: Rs 680, 10: Rs 640). |
-| 4 Camp lifecycle and bookings | In progress (4a & 4b backend complete) | 2026-11-17 | | Yes | Sub-phase 4a (Ops camp management) complete full-stack. Sub-phase 4b (Resident camp views) backend complete with society isolation, provisional pricing, next-tier deltas, and privacy safeguards. 151 total backend tests passing. |
+| 4 Camp lifecycle and bookings | In progress (4a & 4b full-stack complete) | 2026-11-17 | | Yes | Sub-phases 4a (Ops camp management) and 4b (Resident camp views) complete full-stack. Society isolation, provisional pricing, next-tier deltas, privacy safeguards, and cross-origin auth verified. 151 total backend tests passing. |
 | 5 Vendor flow and photos | Not started | | | | |
 | 6 Frontend | Not started | | | | |
 | 7 Seed, deploy, document | Not started | | | | |

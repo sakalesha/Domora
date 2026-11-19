@@ -10,7 +10,7 @@ import time
 import app.core.security as security
 from fastapi import HTTPException, Request, status
 
-from app.config import CORS_ALLOWED_ORIGINS, CSRF_TOKEN_EXPIRE_SECONDS
+from app.config import CORS_ALLOW_ALL, CORS_ALLOWED_ORIGINS, CSRF_TOKEN_EXPIRE_SECONDS
 
 logger = logging.getLogger("app.csrf")
 
@@ -67,6 +67,9 @@ def is_valid_csrf_token(token: str, *, now: int | None = None) -> bool:
 
 
 def require_allowed_origin(request: Request) -> None:
+    if CORS_ALLOW_ALL:
+        return
+
     origin = request.headers.get("origin")
     if origin is not None:
         origin_clean = origin.rstrip("/")

@@ -36,6 +36,14 @@ _raw_origins = [
     if origin.strip()
 ]
 
+# Support CORS_ALLOW_ALL in development or wildcard in CORS_ALLOWED_ORIGINS
+_has_wildcard = "*" in _raw_origins
+_env_allow_all = os.getenv("CORS_ALLOW_ALL", "").strip().lower() in {"true", "1", "yes"}
+CORS_ALLOW_ALL: bool = _has_wildcard or _env_allow_all or (APP_ENV == "development")
+
+# Strip '*' from raw origins so CORS_ALLOWED_ORIGINS contains only exact URLs
+_raw_origins = [origin for origin in _raw_origins if origin != "*"]
+
 # Automatically allow Vercel deployment origins if deployed on Vercel
 for _vercel_env_key in ("VERCEL_URL", "VERCEL_PROJECT_PRODUCTION_URL"):
     _val = os.getenv(_vercel_env_key)
@@ -73,6 +81,7 @@ def validate_runtime_config(
     secret_key: str = SECRET_KEY,
     token_expiry_minutes: int = ACCESS_TOKEN_EXPIRE_MINUTES,
     cors_allowed_origins: tuple[str, ...] = CORS_ALLOWED_ORIGINS,
+    cors_allow_all: bool = CORS_ALLOW_ALL,
 ) -> None:
     if token_expiry_minutes != 24 * 60:
         raise RuntimeError("ACCESS_TOKEN_EXPIRE_MINUTES must be 1440 for 24 hour sessions")
@@ -94,3 +103,6 @@ def validate_runtime_config(
         raise RuntimeError(
             "Production-like environments require a non-default SECRET_KEY of at least 32 characters"
         )
+
+    if app_env not in {"development", "test"} and cors_allow_all:
+        raise RuntimeError("CORS_ALLOW_ALL cannot be enabled in production-like environments")

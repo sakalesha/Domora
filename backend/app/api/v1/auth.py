@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -42,9 +43,19 @@ from app.services.user_service import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _secure_cookie() -> bool:
-    """Determine whether cookies must enforce the HTTPS Secure flag based on current environment."""
-    return APP_ENV not in {"development", "test"}
+def _cookie_samesite_and_secure(request: Request) -> tuple[Literal["lax", "none"], bool]:
+    """
+    Determine SameSite and Secure cookie attributes based on environment and request origin.
+
+    In development, when requests arrive from an HTTPS origin (e.g. Google AI Studio preview
+    at https://ais-dev-...run.app or https://aistudio.google.com), we must use SameSite="none"
+    and Secure=True so the browser does not strip the cookie on cross-site fetch calls.
+    For standard localhost and unit tests, we keep SameSite="lax" and Secure=False.
+    """
+    origin = request.headers.get("origin")
+    if APP_ENV == "development" and origin and origin.startswith("https://"):
+        return "none", True
+    return "lax", APP_ENV not in {"development", "test"}
 
 
 def _is_username_or_phone_conflict(error: IntegrityError) -> bool:
@@ -82,13 +93,14 @@ def read_csrf_token(request: Request, response: Response) -> CsrfTokenResponse:
         if expires_at is None:
             raise RuntimeError("A valid CSRF token did not contain an expiry")
 
+    samesite, secure = _cookie_samesite_and_secure(request)
     response.set_cookie(
         key=CSRF_COOKIE_NAME,
         value=token,
         max_age=max(0, expires_at - int(time.time())),
         httponly=True,
-        secure=_secure_cookie(),
-        samesite="lax",
+        secure=secure,
+        samesite=samesite,
         path="/",
     )
     return CsrfTokenResponse(csrf_token=token)
@@ -146,6 +158,7 @@ def signup(
 def login(
     request: LoginRequest,
     response: Response,
+    http_request: Request,
     session: Session = Depends(get_db),
     _: None = Depends(require_csrf),
 ) -> AuthSessionResponse:
@@ -170,15 +183,17 @@ def login(
 
     expires_in = ACCESS_TOKEN_EXPIRE_MINUTES * 60
     token = create_access_token(user.id)
+    samesite, secure = _cookie_samesite_and_secure(http_request)
     response.set_cookie(
         key=ACCESS_COOKIE_NAME,
         value=token,
         max_age=expires_in,
         httponly=True,
-        secure=_secure_cookie(),
-        samesite="lax",
+        secure=secure,
+        samesite=samesite,
         path="/",
     )
+    response.headers["X-Access-Token"] = token
     return AuthSessionResponse(expires_in=expires_in)
 
 
@@ -197,20 +212,24 @@ def read_current_user(
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )
-def logout(_: None = Depends(require_csrf)) -> Response:
+def logout(
+    request: Request,
+    _: None = Depends(require_csrf),
+) -> Response:
     """
     Terminate the current user session.
 
     Clears the HttpOnly authentication access token and CSRF cookies by setting their
     expiration to zero. Requires CSRF protection.
     """
+    samesite, secure = _cookie_samesite_and_secure(request)
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     for cookie_name in (ACCESS_COOKIE_NAME, CSRF_COOKIE_NAME):
         response.delete_cookie(
             key=cookie_name,
             path="/",
-            secure=_secure_cookie(),
+            secure=secure,
             httponly=True,
-            samesite="lax",
+            samesite=samesite,
         )
     return response

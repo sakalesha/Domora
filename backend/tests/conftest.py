@@ -19,9 +19,13 @@ from app.models.domain import User
 
 @pytest.fixture(autouse=True)
 def test_secret_key(monkeypatch):
+    import app.config as config
+    import app.core.csrf as csrf
     import app.core.security as security
 
     monkeypatch.setattr(security, "SECRET_KEY", "test-only-secret-key-with-at-least-32-bytes")
+    monkeypatch.setattr(config, "CORS_ALLOW_ALL", False)
+    monkeypatch.setattr(csrf, "CORS_ALLOW_ALL", False)
 
 
 @pytest.fixture
