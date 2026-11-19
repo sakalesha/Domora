@@ -169,9 +169,10 @@ def login(
         ) from None
 
     expires_in = ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    token = create_access_token(user.id)
     response.set_cookie(
         key=ACCESS_COOKIE_NAME,
-        value=create_access_token(user.id),
+        value=token,
         max_age=expires_in,
         httponly=True,
         secure=_secure_cookie(),
