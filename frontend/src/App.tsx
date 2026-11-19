@@ -9,6 +9,8 @@ import { LoginPage } from './pages/LoginPage'
 import { CampDetailPage } from './pages/ops/CampDetailPage'
 import { CreateCampPage } from './pages/ops/CreateCampPage'
 import { OpsDashboardPage } from './pages/ops/OpsDashboardPage'
+import { ResidentCampDetailPage } from './pages/resident/ResidentCampDetailPage'
+import { ResidentDashboardPage } from './pages/resident/ResidentDashboardPage'
 import { RoleHomePage } from './pages/RoleHomePage'
 import { SignupPage } from './pages/SignupPage'
 import { WelcomePage } from './pages/WelcomePage'
@@ -97,7 +99,22 @@ function App() {
         }
         path="/signup"
       />
-      <Route element={<ProtectedRole role="resident" />} path="/resident" />
+      <Route
+        element={
+          <ProtectedRole role="resident">
+            <ResidentDashboardPage />
+          </ProtectedRole>
+        }
+        path="/resident"
+      />
+      <Route
+        element={
+          <ProtectedRole role="resident">
+            <ResidentCampDetailPage />
+          </ProtectedRole>
+        }
+        path="/resident/camps/:campId"
+      />
       <Route element={<ProtectedRole role="vendor" />} path="/vendor" />
       <Route
         element={

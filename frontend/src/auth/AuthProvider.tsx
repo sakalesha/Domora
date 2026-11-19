@@ -64,8 +64,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return registerSessionExpiredHandler(() => {
       setAuth({ status: 'anonymous', user: null })
       setNotice('Your session expired. Please log in again.')
+      void refreshCsrf()
     })
-  }, [])
+  }, [refreshCsrf])
 
   useEffect(() => {
     let active = true
@@ -173,7 +174,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       await loginRequest(username.trim(), password, csrfToken)
 
       try {
-        const user = await getCurrentUser(true)
+        const user = await getCurrentUser(false)
         setAuth({ status: 'authenticated', user })
         return user
       } catch (error: unknown) {
