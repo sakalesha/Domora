@@ -24,4 +24,12 @@ api_router.include_router(orders_router)
 api_router.include_router(resident_router)
 api_router.include_router(users_router)
 
-__all__ = ["api_router"]
+# 3. Root aliases (/auth, /ops, /orders, /resident, /users) for backward compatibility with direct clients
+root_router = APIRouter()
+root_router.include_router(auth_router)
+root_router.include_router(ops_router)
+root_router.include_router(orders_router)
+root_router.include_router(resident_router)
+root_router.include_router(users_router)
+
+__all__ = ["api_router", "root_router"]

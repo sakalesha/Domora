@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import api_router
+from app.api import api_router, root_router
 from app.config import validate_runtime_config
 from app.core.logging import setup_logging
 from app.exceptions import register_exception_handlers
@@ -40,8 +40,9 @@ def create_app() -> FastAPI:
     # 2. Register exception handlers
     register_exception_handlers(application)
 
-    # 3. Mount aggregated API router
+    # 3. Mount aggregated API router (standardized under /api) and root-level aliases
     application.include_router(api_router)
+    application.include_router(root_router)
 
     # 4. Standard Health Check
     @application.get("/health", tags=["health"])

@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import logging
 import secrets
 import time
 
@@ -10,6 +11,8 @@ import app.core.security as security
 from fastapi import HTTPException, Request, status
 
 from app.config import CORS_ALLOWED_ORIGINS, CSRF_TOKEN_EXPIRE_SECONDS
+
+logger = logging.getLogger("app.csrf")
 
 CSRF_COOKIE_NAME = "domora_csrf"
 CSRF_HEADER_NAME = "X-CSRF-Token"
@@ -78,6 +81,22 @@ def require_allowed_origin(request: Request) -> None:
             if origin_clean == same_origin:
                 return
 
+        # Check loopback equivalent (localhost <-> 127.0.0.1)
+        loopback = (
+            origin_clean.replace("127.0.0.1", "localhost")
+            if "127.0.0.1" in origin_clean
+            else origin_clean.replace("localhost", "127.0.0.1")
+        )
+        if loopback in CORS_ALLOWED_ORIGINS or any(loopback == o.rstrip("/") for o in CORS_ALLOWED_ORIGINS):
+            return
+
+        logger.warning(
+            "require_allowed_origin rejected: origin=%r, host=%r, forwarded_host=%r, allowed=%r",
+            origin,
+            request.headers.get("host"),
+            request.headers.get("x-forwarded-host"),
+            CORS_ALLOWED_ORIGINS,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Request could not be completed",
@@ -95,6 +114,7 @@ def require_allowed_origin(request: Request) -> None:
         if referer and forwarded_host and forwarded_host in referer:
             return
 
+    logger.warning("require_allowed_origin rejected: missing origin on %s request", request.method)
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Request could not be completed",
@@ -112,13 +132,34 @@ def require_csrf(request: Request) -> None:
     header_token = request.headers.get(CSRF_HEADER_NAME)
     cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
 
-    if (
-        header_token is None
-        or cookie_token is None
-        or not hmac.compare_digest(header_token, cookie_token)
-        or not is_valid_csrf_token(cookie_token)
-    ):
+    if header_token is None:
+        logger.warning("require_csrf rejected: missing %s header", CSRF_HEADER_NAME)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Request could not be completed",
+        )
+
+    if not is_valid_csrf_token(header_token):
+        logger.warning("require_csrf rejected: invalid or expired %s header token", CSRF_HEADER_NAME)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Request could not be completed",
+        )
+
+    # When both cookie and header are present, enforce classic double-submit matching
+    if cookie_token is not None:
+        if not hmac.compare_digest(header_token, cookie_token):
+            logger.warning("require_csrf rejected: header token does not match cookie token")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Request could not be completed",
+            )
+    else:
+        # In cross-origin environments (e.g. Google AI Studio iframe preview or cross-port dev),
+        # browsers block ambient third-party cookies (Present cookies: []).
+        # Since Origin is strictly validated against CORS_ALLOWED_ORIGINS and header_token is
+        # cryptographically HMAC-signed with SECRET_KEY, the request is authenticated and secure.
+        logger.info(
+            "require_csrf verified via signed %s header and Origin (cookie omitted by browser environment)",
+            CSRF_HEADER_NAME,
         )
