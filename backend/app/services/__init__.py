@@ -17,6 +17,13 @@ from app.services.camp_ops import (
     list_services,
     list_societies,
 )
+from app.services.camp_resident import (
+    ResidentCampError,
+    ResidentCampNotFoundError,
+    ResidentSocietyRequiredError,
+    get_resident_camp_detail,
+    list_resident_camps,
+)
 from app.services.camp_rules import (
     CampRuleValidationError,
     calculate_capacity_slots,
@@ -68,6 +75,9 @@ __all__ = [
     "PriceTier",
     "PricingError",
     "PricingQuote",
+    "ResidentCampError",
+    "ResidentCampNotFoundError",
+    "ResidentSocietyRequiredError",
     "ServiceNotFoundError",
     "SocietyNotFoundError",
     "UserServiceError",
@@ -84,8 +94,10 @@ __all__ = [
     "create_resident",
     "get_camp_detail",
     "get_camp_or_raise",
+    "get_resident_camp_detail",
     "list_active_vendors",
     "list_camps",
+    "list_resident_camps",
     "list_resident_orders",
     "list_services",
     "list_societies",

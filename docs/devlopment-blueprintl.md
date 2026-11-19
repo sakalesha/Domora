@@ -180,7 +180,12 @@ Sub-phases:
     - Create Camp (`frontend/src/pages/ops/CreateCampPage.tsx`): 2-column desktop architecture with structured form sections on the left, sticky live stepped pricing preview ladder on the right, live window slot capacity calculator with leftover minute alerts (`+15m buffer`), and a pre-launch confirmation review modal with resident visibility notice before going live as `open`.
     - Camp Detail & Roster (`frontend/src/pages/ops/CampDetailPage.tsx`): Unified multi-milestone progress meter with min-confirmation notch and tier milestones, sub-tabbed triage interface (`Roster & Visits`, `Overview & Schedule`, `Group Tiers`), participant roster with scheduled visit times, join sequence, unit numbers, phone links, and an interactive vendor assignment modal.
     - Route Wiring (`frontend/src/App.tsx`): Wired role-guarded `/ops`, `/ops/camps`, `/ops/camps/new`, and `/ops/camps/:campId` routes.
-- **[ ] 4b Resident camp views:** only the resident's own society; computed fields: participants, spots left, provisional current price, next tier and neighbours needed.
+- **[x] 4b Resident camp views:** only the resident's own society; computed fields: participants, spots left, provisional current price, next tier and neighbours needed. (Backend implementation complete; frontend managed via Google AI Studio).
+  - **Backend Implementation:**
+    - Schemas (`backend/app/schemas/resident.py`): Pydantic v2 models with `extra="forbid"` (`ResidentCampListItem`, `ResidentCampDetail`, `ResidentNextTier`, `ResidentBookingSummary`, `ResidentTierItem`, `ResidentSocietySummary`, `ResidentServiceSummary`).
+    - Domain Service (`backend/app/services/camp_resident.py`): `list_resident_camps` and `get_resident_camp_detail` enforcing strict society isolation, real-time headcount aggregation, dynamic provisional discount & price computation via Phase 3 pricing engine, spots-remaining capacity tracking, next-tier motivation deltas, and resident active-booking status.
+    - API Router (`backend/app/api/v1/resident.py` & `backend/app/api/router.py`): Mounted at `/api/v1/resident/camps` and `/api/resident/camps` guarded by `require_role("resident")`. Cross-society camp lookups return 404 to avoid leaking existence of camps in other societies.
+    - Tests (`backend/tests/test_resident_camps.py`): 13 comprehensive unit and integration tests verifying society isolation, dynamic provisional pricing with demo numbers (Rs 800 -> 3: Rs 720, 6: Rs 680, 10: Rs 640), next-tier calculations, privacy safeguards (no neighbor names/units in output), deadline and capacity restrictions (151 total backend tests passing).
 - **[ ] 4c Join and leave:** rules 1, 2, 3 and 9 from the design (one active booking, capacity, society isolation, deadline); leave is allowed up to 24 hours before the window; ops may cancel any time.
 - **[ ] 4d Confirm and cancel camp:** confirm needs enough participants and a vendor; it computes the final price once, applies it to everyone, assigns consecutive time slots in join order, and moves bookings to "scheduled"; cancel needs a reason and cancels all active bookings.
 - **[ ] 4e Derived transitions:** when every participant cancels a confirmed camp, the camp is cancelled; when every booking is completed, the camp is completed.
@@ -338,14 +343,14 @@ Decided:
 | D10 | Store session tokens in HttpOnly, SameSite=Lax cookies with double-submit X-CSRF-Token header protection rather than localStorage, mitigating XSS risks. |
 | D11 | Post-signup initiates chained auto-login for smooth resident onboarding, falling back to prefilled login if chained authentication fails. |
 | D12 | Host backend and frontend together on Vercel using Vercel Services (services in vercel.json) with /api/(.*) routing to FastAPI and catch-all to Vite SPA. |
+| D13 | P1 (Risk R1): Adopt label-only warning ("Current provisional price • Locks at confirmation") instead of a guaranteed price floor, preserving pure group-buying mechanics without platform liability. |
+| D14 | P6: Resident camp discovery views show aggregate participant counts only, never neighbor names, phone numbers, or unit numbers, strictly protecting residential privacy. |
 
 Pending (decide at the phase shown):
 
 | # | Question | Decide by |
 | --- | --- | --- |
-| P1 | R1: guaranteed price floor, or label-only warning that the open-camp price can rise? | Before Phase 4b |
 | P3 | Photo storage details: bucket setup, size limit, allowed formats. | Phase 5 |
-| P6 | Do residents see other participants' names, or only counts? (Default: counts only.) | Phase 4b |
 | P7 | Public or private repository, and when it goes public. | Phase 0 |
 
 ---
@@ -358,7 +363,7 @@ Pending (decide at the phase shown):
 | 1 Data model | Complete | 2026-11-15 | 2026-11-15 | Yes | Postgres migration round-trip, constraints, RLS, and public API verified; digital ERD used instead of paper exercise. |
 | 2 Auth and roles | Complete | 2026-11-16 | 2026-11-16 | Yes | Full-stack auth complete (FastAPI backend + Vite React frontend). 50 backend tests pass; frontend lint and build pass. Welcome, Login, Signup, role routing, HttpOnly cookies + CSRF tokens, and Vercel Services deployment configured. |
 | 3 Pricing and camp rules | Complete | 2026-11-17 | 2026-11-17 | Yes | Pure domain functions for pricing and camp rules implemented using TDD. Integer paise arithmetic with ROUND_HALF_UP. 63 dedicated tests passing (113 backend tests total). Demo numbers verified (3: Rs 720, 6: Rs 680, 10: Rs 640). |
-| 4 Camp lifecycle and bookings | In progress (4a complete) | 2026-11-17 | | Yes | Sub-phase 4a (Ops camp management) complete full-stack. Backend service (`camp_ops`), API (`/ops/camps`, `/ops/vendors`, etc.), 19 automated tests (132 total backend tests passing), and Ops UI dashboard, camp creation with dynamic tiers, and camp detail view. |
+| 4 Camp lifecycle and bookings | In progress (4a & 4b backend complete) | 2026-11-17 | | Yes | Sub-phase 4a (Ops camp management) complete full-stack. Sub-phase 4b (Resident camp views) backend complete with society isolation, provisional pricing, next-tier deltas, and privacy safeguards. 151 total backend tests passing. |
 | 5 Vendor flow and photos | Not started | | | | |
 | 6 Frontend | Not started | | | | |
 | 7 Seed, deploy, document | Not started | | | | |

@@ -30,6 +30,15 @@ from app.schemas.order import (
     OrderCreate,
     OrderResponse,
 )
+from app.schemas.resident import (
+    ResidentBookingSummary,
+    ResidentCampDetail,
+    ResidentCampListItem,
+    ResidentNextTier,
+    ResidentServiceSummary,
+    ResidentSocietySummary,
+    ResidentTierItem,
+)
 from app.schemas.user import (
     UserBase,
     UserCreate,
@@ -56,6 +65,13 @@ __all__ = [
     "PriceTierInput",
     "PriceTierResponse",
     "PricingQuoteResponse",
+    "ResidentBookingSummary",
+    "ResidentCampDetail",
+    "ResidentCampListItem",
+    "ResidentNextTier",
+    "ResidentServiceSummary",
+    "ResidentSocietySummary",
+    "ResidentTierItem",
     "ServiceReferenceResponse",
     "SignupRequest",
     "SocietyReferenceResponse",
