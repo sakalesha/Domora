@@ -25,13 +25,13 @@ export function FormField({
     .join(' ')
 
   return (
-    <div className="grid gap-2">
-      <label className="text-base font-medium text-ink" htmlFor={id}>
+    <div className="grid gap-1.5">
+      <label className="text-sm font-semibold text-ink" htmlFor={id}>
         {label}
       </label>
       <div
-        className={`flex min-h-control items-center rounded-sm border bg-surface transition-colors duration-base ease-standard focus-within:ring-2 focus-within:ring-accent focus-within:ring-offset-2 focus-within:ring-offset-canvas ${
-          error ? 'border-error' : 'border-border'
+        className={`flex min-h-control items-center rounded-sm border bg-surface transition-colors duration-base ease-standard focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/25 ${
+          error ? 'border-error' : 'border-border-strong'
         }`}
       >
         <input
@@ -41,17 +41,17 @@ export function FormField({
           aria-required={required || undefined}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy || undefined}
-          className="h-control min-w-0 flex-1 rounded-sm border-0 bg-transparent px-4 text-base text-ink outline-none placeholder:text-muted"
+          className="h-control min-w-0 flex-1 rounded-sm border-0 bg-transparent px-3.5 text-base text-ink outline-none placeholder:text-muted/80"
         />
         {trailing}
       </div>
       {hint ? (
-        <p className="text-base text-muted" id={`${id}-hint`}>
+        <p className="text-xs text-muted" id={`${id}-hint`}>
           {hint}
         </p>
       ) : null}
       {error ? (
-        <p className="text-base text-error" id={`${id}-error`} role="alert">
+        <p className="text-sm font-medium text-error" id={`${id}-error`} role="alert">
           {error}
         </p>
       ) : null}

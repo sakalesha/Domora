@@ -6,13 +6,15 @@ import {
   NetworkError,
   SignupLoginError,
 } from '../auth/api'
-import { useAuth } from '../auth/useAuth'
 import { roleHomePath } from '../auth/roleRoutes'
 import type { SignupValues } from '../auth/types'
+import { useAuth } from '../auth/useAuth'
 import { AuthShell } from '../components/AuthShell'
 import { CsrfStatus } from '../components/CsrfStatus'
 import { FormField } from '../components/FormField'
+import { ArrowLeftIcon } from '../components/icons/Icons'
 import { PrimaryButton } from '../components/PrimaryButton'
+import { useDocumentTitle } from '../utils/format'
 
 type SignupFieldName = keyof SignupValues
 type SignupErrors = Partial<Record<SignupFieldName, string>>
@@ -117,6 +119,8 @@ function validationErrors(error: ApiError): SignupErrors {
 }
 
 export function SignupPage() {
+  useDocumentTitle('Create resident account | Domora')
+
   const { csrf, refreshCsrf, signUp } = useAuth()
   const navigate = useNavigate()
   const [values, setValues] = useState<SignupValues>(emptyValues)
@@ -192,28 +196,29 @@ export function SignupPage() {
   }
 
   return (
-    <AuthShell>
-      <div className="grid gap-7">
+    <AuthShell maxWidth="wide">
+      <div className="grid gap-6">
         <Link
-          className="inline-flex items-center gap-2 self-start rounded-sm text-base font-medium text-muted transition-colors duration-base hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          className="inline-flex items-center gap-2 self-start rounded-sm text-sm font-medium text-muted transition-colors duration-base hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
           to="/login"
         >
-          <span aria-hidden="true">&larr;</span> Back to sign in
+          <ArrowLeftIcon className="h-4 w-4" />
+          <span>Back to sign in</span>
         </Link>
 
-        <header className="grid gap-2">
-          <h1 className="text-3xl font-bold tracking-tight text-ink">
+        <header className="grid gap-1.5">
+          <h1 className="font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">
             Join your society
           </h1>
-          <p className="text-base text-body">
-            Create a resident account to get started with Domora.
+          <p className="text-sm text-body">
+            Create a resident account to join home-service camps in your apartment community.
           </p>
         </header>
 
         {formError ? (
           <p
             aria-live="polite"
-            className="rounded-sm border border-error bg-canvas p-4 text-base text-error"
+            className="rounded-sm border border-error/40 bg-red-50 px-4 py-3 text-sm font-medium text-error"
             role="alert"
           >
             {formError}
@@ -222,7 +227,7 @@ export function SignupPage() {
 
         <CsrfStatus />
 
-        <form className="grid gap-5" noValidate onSubmit={handleSubmit}>
+        <form className="grid gap-4" noValidate onSubmit={handleSubmit}>
           <FormField
             autoComplete="name"
             error={errors.full_name}
@@ -254,7 +259,7 @@ export function SignupPage() {
               <button
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
                 aria-pressed={showPassword}
-                className="min-h-control min-w-[3rem] rounded-sm px-3 text-base font-medium text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                className="min-h-control min-w-[3.5rem] rounded-sm px-3 text-sm font-semibold text-accent transition-colors hover:text-accent-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
                 onClick={() => setShowPassword((visible) => !visible)}
                 type="button"
               >
@@ -264,25 +269,27 @@ export function SignupPage() {
             type={showPassword ? 'text' : 'password'}
             value={values.password}
           />
-          <FormField
-            autoComplete="tel"
-            error={errors.phone}
-            id="phone"
-            label="Phone number"
-            onChange={(event) => updateField('phone', event.target.value)}
-            required
-            type="tel"
-            value={values.phone}
-          />
-          <FormField
-            autoComplete="address-line2"
-            error={errors.unit_label}
-            id="unit_label"
-            label="Flat or unit"
-            onChange={(event) => updateField('unit_label', event.target.value)}
-            required
-            value={values.unit_label}
-          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              autoComplete="tel"
+              error={errors.phone}
+              id="phone"
+              label="Phone number"
+              onChange={(event) => updateField('phone', event.target.value)}
+              required
+              type="tel"
+              value={values.phone}
+            />
+            <FormField
+              autoComplete="address-line2"
+              error={errors.unit_label}
+              id="unit_label"
+              label="Flat or unit"
+              onChange={(event) => updateField('unit_label', event.target.value)}
+              required
+              value={values.unit_label}
+            />
+          </div>
           <FormField
             autoComplete="off"
             error={errors.invite_code}
@@ -295,20 +302,22 @@ export function SignupPage() {
             required
             value={values.invite_code}
           />
-          <PrimaryButton
-            disabled={csrf.status !== 'ready'}
-            pending={pending}
-            pendingLabel="Creating your account..."
-            type="submit"
-          >
-            Create account
-          </PrimaryButton>
+          <div className="pt-1">
+            <PrimaryButton
+              disabled={csrf.status !== 'ready'}
+              pending={pending}
+              pendingLabel="Creating your account..."
+              type="submit"
+            >
+              Create account
+            </PrimaryButton>
+          </div>
         </form>
 
-        <p className="text-center text-base text-body">
+        <p className="border-t border-border pt-5 text-center text-sm text-body">
           Already have an account?{' '}
           <Link
-            className="rounded-sm font-medium text-accent underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            className="rounded-sm font-semibold text-accent underline underline-offset-4 hover:text-accent-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
             to="/login"
           >
             Sign in

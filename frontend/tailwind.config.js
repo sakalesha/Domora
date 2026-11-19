@@ -1,26 +1,31 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
-  darkMode: 'class',
   theme: {
     extend: {
       colors: {
         canvas: 'var(--color-canvas)',
         surface: 'var(--color-surface)',
+        'surface-subtle': 'var(--color-surface-subtle)',
         border: 'var(--color-border)',
+        'border-strong': 'var(--color-border-strong)',
         muted: 'var(--color-muted)',
         body: 'var(--color-body)',
         ink: 'var(--color-ink)',
         accent: {
           DEFAULT: 'var(--color-accent)',
           pressed: 'var(--color-accent-pressed)',
+          soft: 'var(--color-accent-soft)',
         },
         'on-accent': 'var(--color-on-accent)',
         success: 'var(--color-success)',
+        warning: 'var(--color-warning)',
         error: 'var(--color-error)',
       },
       fontFamily: {
+        display: 'var(--font-display)',
         sans: 'var(--font-sans)',
+        mono: 'var(--font-mono)',
       },
       fontSize: {
         xs: 'var(--text-xs)',
@@ -35,6 +40,7 @@ export default {
       fontWeight: {
         normal: 'var(--font-weight-regular)',
         medium: 'var(--font-weight-medium)',
+        semibold: 'var(--font-weight-semibold)',
         bold: 'var(--font-weight-bold)',
       },
       spacing: {
@@ -54,6 +60,7 @@ export default {
       },
       maxWidth: {
         auth: 'var(--size-auth-card)',
+        'auth-wide': 'var(--size-auth-card-wide)',
       },
       height: {
         control: 'var(--size-control)',
@@ -64,10 +71,13 @@ export default {
       borderRadius: {
         sm: 'var(--radius-sm)',
         md: 'var(--radius-md)',
+        lg: 'var(--radius-lg)',
         full: 'var(--radius-full)',
       },
       boxShadow: {
+        card: 'var(--shadow-card)',
         auth: 'var(--shadow-auth)',
+        modal: 'var(--shadow-modal)',
       },
       transitionDuration: {
         instant: 'var(--duration-instant)',
@@ -89,4 +99,3 @@ export default {
   },
   plugins: [],
 }
-

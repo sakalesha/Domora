@@ -4,10 +4,7 @@ import {
   type UserProfile,
 } from './types'
 
-const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL ??
-  (import.meta.env.PROD ? '/api' : 'http://localhost:8000')
-).replace(/\/+$/, '')
+const API_BASE_URL = '/api'
 
 export class ApiError extends Error {
   readonly status: number

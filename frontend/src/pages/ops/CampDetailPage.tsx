@@ -9,10 +9,12 @@ import {
 } from '../../api/ops'
 import { getCsrfToken } from '../../auth/api'
 import {
+  AlertTriangleIcon,
   BuildingIcon,
   CalendarIcon,
   CheckIcon,
   ClockIcon,
+  InfoIcon,
   PhoneIcon,
   TagIcon,
   UsersIcon,
@@ -21,21 +23,19 @@ import {
 } from '../../components/icons/Icons'
 import { CampStatusBadge } from '../../components/ops/CampStatusBadge'
 import { OpsLayout } from '../../components/ops/OpsLayout'
+import {
+  calculateDiscountedPricePaise,
+  formatDateTime,
+  formatPaiseToRupees,
+  formatTimeOnly,
+} from '../../utils/format'
 
-function formatDateTime(isoString: string): string {
-  const d = new Date(isoString)
-  return d.toLocaleString('en-IN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  })
-}
-
-function formatPaise(paise: number): string {
-  return `₹${(paise / 100).toLocaleString('en-IN', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })}`
-}
+const lifecycleStages = [
+  { id: 'open', label: 'Open for Booking' },
+  { id: 'confirmed', label: 'Confirmed' },
+  { id: 'in_progress', label: 'In Progress' },
+  { id: 'completed', label: 'Completed' },
+] as const
 
 export function CampDetailPage() {
   const { campId } = useParams<{ campId: string }>()
@@ -48,7 +48,6 @@ export function CampDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
-  // Primary Tabs State
   const [activeTab, setActiveTab] = useState<'roster' | 'overview' | 'tiers'>('roster')
 
   useEffect(() => {
@@ -72,6 +71,17 @@ export function CampDetailPage() {
     void loadData()
   }, [campId])
 
+  useEffect(() => {
+    if (!showVendorModal) return
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !assigningVendor) {
+        setShowVendorModal(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showVendorModal, assigningVendor])
+
   async function handleAssignVendor(e: React.FormEvent) {
     e.preventDefault()
     if (!campId) return
@@ -86,7 +96,11 @@ export function CampDetailPage() {
         csrfToken,
       )
       setCamp(updated)
-      setNotice('Partner vendor updated successfully')
+      setNotice(
+        updated.vendor
+          ? `Assigned partner vendor: ${updated.vendor.full_name}`
+          : 'Partner vendor unassigned',
+      )
       setShowVendorModal(false)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to assign vendor')
@@ -98,11 +112,18 @@ export function CampDetailPage() {
   if (loading) {
     return (
       <OpsLayout
-        breadcrumbs={[{ label: 'Operations', to: '/ops' }, { label: 'Camps', to: '/ops' }, { label: 'Loading...' }]}
+        breadcrumbs={[
+          { label: 'Operations', to: '/ops' },
+          { label: 'Camps', to: '/ops' },
+          { label: 'Loading...' },
+        ]}
       >
         <div className="flex h-64 items-center justify-center">
-          <div className="flex items-center gap-2 text-xs font-semibold text-muted">
-            <span className="spinner h-4 w-4" />
+          <div className="flex items-center gap-3 text-sm font-medium text-muted">
+            <span
+              aria-hidden="true"
+              className="spinner !border-border !border-t-accent"
+            />
             <span>Loading camp data & roster...</span>
           </div>
         </div>
@@ -113,16 +134,20 @@ export function CampDetailPage() {
   if (error && !camp) {
     return (
       <OpsLayout
-        breadcrumbs={[{ label: 'Operations', to: '/ops' }, { label: 'Camps', to: '/ops' }, { label: 'Error' }]}
+        breadcrumbs={[
+          { label: 'Operations', to: '/ops' },
+          { label: 'Camps', to: '/ops' },
+          { label: 'Error' },
+        ]}
       >
-        <div className="mx-auto mt-12 max-w-lg rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-red-800">
-          <p className="font-bold">Error Loading Camp</p>
-          <p className="mt-1 text-xs text-red-700">{error}</p>
+        <div className="mx-auto mt-12 max-w-lg rounded-md border border-error/40 bg-red-50 p-6 text-center text-error">
+          <p className="font-display text-base font-bold">Error Loading Camp</p>
+          <p className="mt-1 text-sm">{error}</p>
           <Link
             to="/ops"
-            className="mt-4 inline-block rounded-lg bg-red-800 px-4 py-2 text-xs font-semibold text-white"
+            className="mt-4 inline-block rounded-sm bg-error px-4 py-2 text-sm font-semibold text-on-accent"
           >
-            ← Return to Dashboard
+            Return to Dashboard
           </Link>
         </div>
       </OpsLayout>
@@ -137,6 +162,7 @@ export function CampDetailPage() {
     100,
     Math.round((activeCount / camp.max_participants) * 100),
   )
+  const currentStageIndex = lifecycleStages.findIndex((s) => s.id === camp.status)
 
   return (
     <OpsLayout
@@ -146,97 +172,152 @@ export function CampDetailPage() {
         { label: camp.title },
       ]}
       title={camp.title}
-      subtitle={`${camp.society.name} (${camp.society.city}) • ${camp.service.name}`}
+      subtitle={`${camp.society.name} (${camp.society.city}) · ${camp.service.name}`}
       actions={
         <div className="flex items-center gap-2.5">
           <CampStatusBadge status={camp.status} />
           <button
             type="button"
             onClick={() => setShowVendorModal(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border/40 bg-surface px-3 py-1.5 text-xs font-semibold text-ink shadow-xs transition hover:bg-canvas active:scale-[0.98]"
+            className="inline-flex items-center gap-1.5 rounded-sm border border-border-strong bg-surface px-3 py-1.5 text-sm font-semibold text-ink shadow-card transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            <VendorIcon className="h-3.5 w-3.5 text-muted" />
+            <VendorIcon className="h-4 w-4 text-muted" />
             <span>{camp.vendor ? 'Reassign Vendor' : 'Assign Vendor'}</span>
           </button>
         </div>
       }
     >
-      {/* Toast Notice */}
+      {/* Feedback Notice / Error */}
       {notice ? (
-        <div className="mb-6 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800">
+        <div
+          role="status"
+          className="mb-6 flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900"
+        >
           <div className="flex items-center gap-2">
-            <CheckIcon className="h-4 w-4 text-emerald-600" />
+            <CheckIcon className="h-4 w-4 shrink-0 text-emerald-700" />
             <span>{notice}</span>
           </div>
           <button
             type="button"
             onClick={() => setNotice(null)}
-            className="text-emerald-700 hover:text-emerald-900"
+            aria-label="Dismiss notice"
+            className="rounded-sm p-1 text-emerald-700 hover:bg-emerald-100"
           >
-            <XIcon className="h-3.5 w-3.5" />
+            <XIcon className="h-4 w-4" />
           </button>
         </div>
       ) : null}
 
       {error ? (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-semibold text-red-800">
+        <div
+          role="alert"
+          className="mb-6 rounded-md border border-error/40 bg-red-50 p-4 text-sm font-medium text-error"
+        >
           {error}
         </div>
       ) : null}
 
-      {/* Top Milestone Progression Banner */}
+      {/* Lifecycle Stepper or Cancelled State Banner */}
+      {camp.status === 'cancelled' ? (
+        <div className="mb-6 flex items-start gap-3 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+          <AlertTriangleIcon className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+          <div>
+            <p className="font-semibold">Camp Cancelled</p>
+            {camp.cancelled_reason ? (
+              <p className="mt-0.5 text-xs text-rose-800">{camp.cancelled_reason}</p>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <ol
+          aria-label="Camp lifecycle progress"
+          className="mb-6 grid grid-cols-2 gap-2 rounded-md border border-border bg-surface p-3 sm:grid-cols-4"
+        >
+          {lifecycleStages.map((stage, idx) => {
+            const isComplete = currentStageIndex > idx
+            const isCurrent = currentStageIndex === idx
+            return (
+              <li
+                key={stage.id}
+                className={`flex items-center gap-2.5 rounded-sm px-3 py-2 text-xs ${
+                  isCurrent
+                    ? 'bg-accent-soft font-semibold text-accent-pressed'
+                    : isComplete
+                      ? 'bg-canvas font-medium text-ink'
+                      : 'text-muted'
+                }`}
+              >
+                <span
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-sm font-mono text-xs font-semibold ${
+                    isCurrent
+                      ? 'bg-accent text-on-accent'
+                      : isComplete
+                        ? 'bg-emerald-600 text-on-accent'
+                        : 'border border-border-strong bg-surface text-muted'
+                  }`}
+                >
+                  {isComplete ? <CheckIcon className="h-3.5 w-3.5" /> : idx + 1}
+                </span>
+                <span className="truncate">{stage.label}</span>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+
+      {/* Milestone Progression Banner */}
       {camp.pricing_quote.next_tier ? (
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-teal-200 bg-teal-50/70 p-4 shadow-xs">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-md border border-teal-200 bg-accent-soft p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-teal-800 font-bold text-sm">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-accent font-mono text-sm font-bold text-on-accent">
               ↑
             </div>
             <div>
-              <p className="text-xs font-bold text-teal-950 sm:text-sm">
+              <p className="text-sm font-semibold text-ink">
                 {camp.pricing_quote.next_tier.participants_needed} more neighbour
                 {camp.pricing_quote.next_tier.participants_needed > 1 ? 's' : ''} needed to unlock{' '}
-                <span className="text-accent font-extrabold">
+                <span className="text-accent-pressed">
                   {camp.pricing_quote.next_tier.discount_pct}% off
                 </span>
               </p>
-              <p className="text-[11px] text-teal-800 font-mono">
-                Target: {camp.pricing_quote.next_tier.min_participants} homes • Next price:{' '}
-                {formatPaise(camp.pricing_quote.next_tier.potential_price_paise)} / home
+              <p className="mt-0.5 font-mono text-xs tabular-nums text-body">
+                Target: {camp.pricing_quote.next_tier.min_participants} homes · Next rate:{' '}
+                {formatPaiseToRupees(camp.pricing_quote.next_tier.potential_price_paise)} / home
               </p>
             </div>
           </div>
-          <div className="rounded-lg border border-teal-300 bg-surface px-3 py-1.5 text-xs font-mono font-bold text-teal-900 shadow-xs">
-            Current Est: {formatPaise(camp.pricing_quote.discounted_price_paise)} / home
+          <div className="rounded-sm border border-teal-300 bg-surface px-3 py-1.5 font-mono text-xs font-semibold tabular-nums text-accent-pressed">
+            Current Est: {formatPaiseToRupees(camp.pricing_quote.discounted_price_paise)} / home
           </div>
         </div>
       ) : camp.pricing_quote.discount_pct > 0 ? (
-        <div className="mb-6 flex items-center gap-3 rounded-xl border border-purple-200 bg-purple-50 p-4 text-xs font-bold text-purple-900">
-          <CheckIcon className="h-4 w-4 text-purple-700 flex-shrink-0" />
+        <div className="mb-6 flex items-center gap-3 rounded-md border border-teal-200 bg-accent-soft p-4 text-sm font-semibold text-accent-pressed">
+          <CheckIcon className="h-4 w-4 shrink-0 text-accent" />
           <span>
-            Maximum group volume discount unlocked ({camp.pricing_quote.discount_pct}% off applies to all{' '}
+            Maximum volume discount unlocked ({camp.pricing_quote.discount_pct}% off applies to all{' '}
             {activeCount} registered homes).
           </span>
         </div>
       ) : null}
 
       {/* Navigation Sub-Tabs */}
-      <div className="mb-6 flex items-center gap-2 border-b border-border/30 pb-3" role="tablist">
+      <div className="mb-6 flex flex-wrap items-center gap-2 border-b border-border pb-3" role="tablist">
         <button
           type="button"
           role="tab"
           aria-selected={activeTab === 'roster'}
           onClick={() => setActiveTab('roster')}
-          className={`flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition active:scale-[0.98] ${
+          className={`flex items-center gap-2 rounded-sm px-3.5 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
             activeTab === 'roster'
-              ? 'bg-ink text-white shadow-xs'
-              : 'bg-surface text-muted hover:bg-canvas hover:text-ink border border-border/30'
+              ? 'bg-ink text-surface shadow-card'
+              : 'border border-border bg-surface text-body hover:bg-surface-subtle hover:text-ink'
           }`}
         >
-          <UsersIcon className="h-3.5 w-3.5" />
+          <UsersIcon className="h-4 w-4" />
           <span>Roster & Visits</span>
           <span
-            className={`rounded-full px-1.5 py-0.2 font-mono text-[10px] tabular-nums ${
-              activeTab === 'roster' ? 'bg-white/20 text-white' : 'bg-canvas text-muted'
+            className={`rounded-sm px-1.5 py-0.5 font-mono text-xs tabular-nums ${
+              activeTab === 'roster' ? 'bg-surface/20 text-surface' : 'bg-canvas text-muted'
             }`}
           >
             {activeCount}
@@ -248,13 +329,13 @@ export function CampDetailPage() {
           role="tab"
           aria-selected={activeTab === 'overview'}
           onClick={() => setActiveTab('overview')}
-          className={`flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition active:scale-[0.98] ${
+          className={`flex items-center gap-2 rounded-sm px-3.5 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
             activeTab === 'overview'
-              ? 'bg-ink text-white shadow-xs'
-              : 'bg-surface text-muted hover:bg-canvas hover:text-ink border border-border/30'
+              ? 'bg-ink text-surface shadow-card'
+              : 'border border-border bg-surface text-body hover:bg-surface-subtle hover:text-ink'
           }`}
         >
-          <CalendarIcon className="h-3.5 w-3.5" />
+          <CalendarIcon className="h-4 w-4" />
           <span>Overview & Schedule</span>
         </button>
 
@@ -263,17 +344,17 @@ export function CampDetailPage() {
           role="tab"
           aria-selected={activeTab === 'tiers'}
           onClick={() => setActiveTab('tiers')}
-          className={`flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition active:scale-[0.98] ${
+          className={`flex items-center gap-2 rounded-sm px-3.5 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
             activeTab === 'tiers'
-              ? 'bg-ink text-white shadow-xs'
-              : 'bg-surface text-muted hover:bg-canvas hover:text-ink border border-border/30'
+              ? 'bg-ink text-surface shadow-card'
+              : 'border border-border bg-surface text-body hover:bg-surface-subtle hover:text-ink'
           }`}
         >
-          <TagIcon className="h-3.5 w-3.5" />
+          <TagIcon className="h-4 w-4" />
           <span>Group Tiers</span>
           <span
-            className={`rounded-full px-1.5 py-0.2 font-mono text-[10px] tabular-nums ${
-              activeTab === 'tiers' ? 'bg-white/20 text-white' : 'bg-canvas text-muted'
+            className={`rounded-sm px-1.5 py-0.5 font-mono text-xs tabular-nums ${
+              activeTab === 'tiers' ? 'bg-surface/20 text-surface' : 'bg-canvas text-muted'
             }`}
           >
             {camp.price_tiers.length}
@@ -281,39 +362,42 @@ export function CampDetailPage() {
         </button>
       </div>
 
-      {/* TAB CONTENT 1: Roster & Visits */}
+      {/* TAB 1: Roster & Visits */}
       {activeTab === 'roster' && (
-        <div className="rounded-xl border border-border/30 bg-surface shadow-sm overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/20 px-6 py-4">
+        <div className="overflow-hidden rounded-md border border-border bg-surface shadow-card">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
             <div>
-              <h2 className="text-sm font-bold text-ink">Resident Bookings & Scheduled Slots</h2>
-              <p className="text-xs text-muted">
-                Sequential visit times scheduled in join order • {activeCount} of {camp.max_participants} slots filled
+              <h2 className="font-display text-base font-bold text-ink">
+                Resident Bookings & Scheduled Slots
+              </h2>
+              <p className="mt-0.5 text-xs text-muted">
+                Sequential visit times assigned in join order · {activeCount} of{' '}
+                {camp.max_participants} slots filled
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="rounded bg-canvas px-2.5 py-1 font-mono text-xs font-bold text-body border border-border/30">
-                {spotsRemaining > 0 ? `${spotsRemaining} spots left` : 'Capacity Full'}
-              </span>
-            </div>
+            <span className="rounded-sm border border-border bg-canvas px-2.5 py-1 font-mono text-xs font-semibold tabular-nums text-ink">
+              {spotsRemaining > 0 ? `${spotsRemaining} spots left` : 'Capacity Full'}
+            </span>
           </div>
 
           {camp.participants.length === 0 ? (
             <div className="px-6 py-14 text-center">
-              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-accent/10 text-accent">
+              <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-md bg-accent-soft text-accent">
                 <UsersIcon className="h-5 w-5" />
               </div>
-              <h3 className="mt-3 text-xs font-bold text-ink">No bookings enrolled yet</h3>
-              <p className="mt-1 text-xs text-muted max-w-sm mx-auto">
-                Residents of {camp.society.name} will appear here as soon as they join this camp through their portal.
+              <h3 className="mt-3 font-display text-sm font-bold text-ink">
+                No bookings enrolled yet
+              </h3>
+              <p className="mx-auto mt-1 max-w-sm text-xs text-muted">
+                Residents of {camp.society.name} will appear here as soon as they join this camp.
               </p>
             </div>
           ) : (
             <>
               {/* Desktop Table */}
-              <div className="hidden sm:block overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="border-b border-border/30 bg-canvas/70 text-[11px] font-bold uppercase tracking-wider text-muted">
+              <div className="hidden overflow-x-auto sm:block">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-border bg-surface-subtle text-xs font-semibold uppercase tracking-wider text-muted">
                     <tr>
                       <th scope="col" className="px-5 py-3">
                         Scheduled Visit Time
@@ -325,77 +409,63 @@ export function CampDetailPage() {
                         Resident Name
                       </th>
                       <th scope="col" className="px-5 py-3">
-                        Enrolled Order
+                        Order
                       </th>
-                      <th scope="col" className="px-5 py-3">
+                      <th scope="col" className="px-5 py-3 text-right">
                         Quoted Price
                       </th>
                       <th scope="col" className="px-5 py-3">
-                        Booking Status
+                        Status
                       </th>
                       <th scope="col" className="px-5 py-3 text-right">
                         Contact
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border/20 text-body">
+                  <tbody className="divide-y divide-border text-body">
                     {camp.participants.map((p, idx) => (
-                      <tr key={p.booking_id} className="transition-colors hover:bg-canvas/50">
-                        {/* Visit Time */}
+                      <tr key={p.booking_id} className="transition-colors hover:bg-canvas">
                         <td className="px-5 py-3.5 whitespace-nowrap">
                           {p.slot_starts_at ? (
-                            <div className="flex items-center gap-1.5 font-mono font-bold text-ink">
+                            <div className="flex items-center gap-1.5 font-mono text-xs font-semibold tabular-nums text-ink">
                               <ClockIcon className="h-3.5 w-3.5 text-accent" />
-                              <span>
-                                {new Date(p.slot_starts_at).toLocaleTimeString('en-IN', {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </span>
+                              <span>{formatTimeOnly(p.slot_starts_at)}</span>
                             </div>
                           ) : (
-                            <span className="rounded bg-canvas px-2 py-0.5 text-[11px] font-medium text-muted border border-border/20 italic">
+                            <span className="rounded-sm border border-border bg-canvas px-2 py-0.5 text-xs font-medium text-muted">
                               Pending confirmation
                             </span>
                           )}
                         </td>
 
-                        {/* Unit */}
-                        <td className="px-5 py-3.5 whitespace-nowrap">
-                          <span className="font-mono font-bold text-ink">
-                            {p.unit_label ?? '—'}
-                          </span>
+                        <td className="px-5 py-3.5 whitespace-nowrap font-mono text-xs font-semibold text-ink">
+                          {p.unit_label ?? '—'}
                         </td>
 
-                        {/* Resident */}
-                        <td className="px-5 py-3.5 whitespace-nowrap">
-                          <span className="font-semibold text-ink">{p.full_name}</span>
+                        <td className="px-5 py-3.5 whitespace-nowrap font-semibold text-ink">
+                          {p.full_name}
                         </td>
 
-                        {/* Join Order */}
-                        <td className="px-5 py-3.5 whitespace-nowrap text-muted font-mono">
+                        <td className="px-5 py-3.5 whitespace-nowrap font-mono text-xs tabular-nums text-muted">
                           #{idx + 1}
                         </td>
 
-                        {/* Quoted Price */}
-                        <td className="px-5 py-3.5 whitespace-nowrap font-mono font-bold text-ink">
-                          {formatPaise(p.quoted_price_paise)}
+                        <td className="px-5 py-3.5 text-right whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-ink">
+                          {formatPaiseToRupees(p.quoted_price_paise)}
                         </td>
 
-                        {/* Status */}
                         <td className="px-5 py-3.5 whitespace-nowrap">
-                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-800 border border-emerald-200">
+                          <span className="rounded-sm border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-emerald-800">
                             {p.status}
                           </span>
                         </td>
 
-                        {/* Tap to Call */}
-                        <td className="px-5 py-3.5 whitespace-nowrap text-right">
+                        <td className="px-5 py-3.5 text-right whitespace-nowrap">
                           <a
                             href={`tel:${p.phone}`}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-border/40 bg-surface px-2.5 py-1 text-xs font-semibold text-ink shadow-xs transition hover:bg-canvas hover:text-accent"
+                            className="inline-flex items-center gap-1.5 rounded-sm border border-border-strong bg-surface px-2.5 py-1 font-mono text-xs font-semibold text-ink transition-colors hover:border-accent hover:text-accent"
                           >
-                            <PhoneIcon className="h-3 w-3 text-muted" />
+                            <PhoneIcon className="h-3.5 w-3.5 text-muted" />
                             <span>{p.phone}</span>
                           </a>
                         </td>
@@ -406,38 +476,34 @@ export function CampDetailPage() {
               </div>
 
               {/* Mobile Stacked Cards */}
-              <div className="grid divide-y divide-border/20 sm:hidden">
+              <div className="grid divide-y divide-border sm:hidden">
                 {camp.participants.map((p, idx) => (
-                  <div key={p.booking_id} className="p-4 space-y-2">
-                    <div className="flex items-start justify-between">
+                  <div key={p.booking_id} className="space-y-2 p-4">
+                    <div className="flex items-start justify-between gap-2">
                       <div>
-                        <span className="font-mono font-bold text-sm text-ink">
+                        <span className="font-mono text-sm font-bold text-ink">
                           Unit {p.unit_label ?? '—'}
                         </span>
-                        <span className="ml-2 text-[11px] text-muted font-mono">
-                          Join #{idx + 1}
+                        <span className="ml-2 font-mono text-xs tabular-nums text-muted">
+                          #{idx + 1}
                         </span>
-                        <p className="text-xs font-medium text-body mt-0.5">{p.full_name}</p>
+                        <p className="mt-0.5 text-sm font-medium text-body">{p.full_name}</p>
                       </div>
                       <a
                         href={`tel:${p.phone}`}
-                        className="inline-flex items-center gap-1 rounded-lg bg-accent px-2.5 py-1 text-xs font-bold text-white shadow-xs"
+                        className="inline-flex items-center gap-1.5 rounded-sm bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent"
                       >
-                        <PhoneIcon className="h-3 w-3" />
+                        <PhoneIcon className="h-3.5 w-3.5" />
                         <span>Call</span>
                       </a>
                     </div>
-                    <div className="flex items-center justify-between border-t border-border/10 pt-2 text-xs">
-                      <span className="font-mono text-muted text-[11px]">
+                    <div className="flex items-center justify-between border-t border-border pt-2 text-xs">
+                      <span className="font-mono text-muted">
                         Slot:{' '}
-                        {p.slot_starts_at
-                          ? new Date(p.slot_starts_at).toLocaleTimeString('en-IN', {
-                              timeStyle: 'short',
-                            })
-                          : 'Pending confirmation'}
+                        {p.slot_starts_at ? formatTimeOnly(p.slot_starts_at) : 'Pending'}
                       </span>
-                      <span className="font-mono font-bold text-ink">
-                        {formatPaise(p.quoted_price_paise)}
+                      <span className="font-mono text-sm font-semibold tabular-nums text-ink">
+                        {formatPaiseToRupees(p.quoted_price_paise)}
                       </span>
                     </div>
                   </div>
@@ -448,159 +514,160 @@ export function CampDetailPage() {
         </div>
       )}
 
-      {/* TAB CONTENT 2: Overview & Schedule */}
+      {/* TAB 2: Overview & Schedule */}
       {activeTab === 'overview' && (
         <div className="grid gap-6 lg:grid-cols-12">
-          {/* Main Overview Column (8 cols) */}
           <div className="space-y-6 lg:col-span-8">
-            {/* Unified Multi-Milestone Capacity Progress Meter */}
-            <div className="rounded-xl border border-border/30 bg-surface p-6 shadow-sm">
-              <div className="flex items-center justify-between border-b border-border/20 pb-3">
-                <h3 className="text-sm font-bold text-ink">Capacity & Milestone Progress</h3>
-                <span className="font-mono text-xs font-bold text-ink">
+            {/* Capacity & Milestone Progress */}
+            <div className="rounded-md border border-border bg-surface p-6 shadow-card">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+                <h2 className="font-display text-base font-bold text-ink">
+                  Capacity & Milestone Progress
+                </h2>
+                <span className="font-mono text-xs font-semibold tabular-nums text-ink">
                   {activeCount} of {camp.max_participants} homes ({capacityPercent}%)
                 </span>
               </div>
 
-              {/* Progress track with milestones */}
-              <div className="relative mt-8 mb-10">
-                <div className="h-3 w-full rounded-full bg-border/20 overflow-hidden">
+              <div className="mt-5">
+                <div className="relative h-3 w-full overflow-hidden rounded-full bg-surface-subtle">
                   <div
-                    className={`h-full rounded-full transition-all duration-300 ${
+                    className={`h-full rounded-full transition-all duration-slow ${
                       activeCount >= camp.min_participants ? 'bg-accent' : 'bg-amber-500'
                     }`}
                     style={{ width: `${capacityPercent}%` }}
                   />
+                  {camp.min_participants > 0 && camp.min_participants < camp.max_participants ? (
+                    <div
+                      className="absolute bottom-0 top-0 z-10 w-0.5 bg-ink"
+                      style={{
+                        left: `${(camp.min_participants / camp.max_participants) * 100}%`,
+                      }}
+                      title={`Minimum confirmation threshold: ${camp.min_participants} homes`}
+                    />
+                  ) : null}
                 </div>
 
-                {/* Min Confirmation Notch */}
-                {camp.min_participants > 0 && camp.min_participants < camp.max_participants ? (
-                  <div
-                    className="absolute top-0 flex flex-col items-center -translate-x-1/2"
-                    style={{ left: `${(camp.min_participants / camp.max_participants) * 100}%` }}
-                  >
-                    <div className="h-5 w-0.5 bg-ink" />
-                    <span className="mt-1 font-mono text-[10px] font-bold text-ink whitespace-nowrap">
-                      Min ({camp.min_participants})
-                    </span>
-                  </div>
-                ) : null}
-
-                {/* Tier Milestone Notches */}
-                {camp.price_tiers.map((t, idx) => {
-                  if (t.min_participants >= camp.max_participants) return null
-                  const leftPct = (t.min_participants / camp.max_participants) * 100
-                  return (
-                    <div
-                      key={idx}
-                      className="absolute top-0 flex flex-col items-center -translate-x-1/2"
-                      style={{ left: `${leftPct}%` }}
-                    >
-                      <div className="h-3 w-0.5 bg-accent" />
-                      <span className="mt-1 font-mono text-[9px] text-muted whitespace-nowrap">
-                        {t.discount_pct}% ({t.min_participants})
+                {/* Non-overlapping Milestone Legend */}
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-canvas px-2 py-1 font-mono font-semibold tabular-nums text-ink">
+                    <span aria-hidden="true" className="h-2.5 w-0.5 bg-ink" />
+                    Min confirm: {camp.min_participants} homes
+                  </span>
+                  {camp.price_tiers.map((t, idx) => {
+                    const reached = activeCount >= t.min_participants
+                    return (
+                      <span
+                        key={idx}
+                        className={`inline-flex items-center gap-1 rounded-sm border px-2 py-1 font-mono font-semibold tabular-nums ${
+                          reached
+                            ? 'border-teal-200 bg-accent-soft text-accent-pressed'
+                            : 'border-border bg-canvas text-muted'
+                        }`}
+                      >
+                        {t.discount_pct}% at {t.min_participants}+
                       </span>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2 border-t border-border/20 pt-4 text-xs">
+              <dl className="mt-5 grid gap-4 border-t border-border pt-4 text-xs sm:grid-cols-2">
                 <div>
-                  <span className="text-muted block">Service Window:</span>
-                  <span className="font-mono font-semibold text-ink">
-                    {formatDateTime(camp.starts_at)} –{' '}
-                    {new Date(camp.ends_at).toLocaleTimeString('en-IN', { timeStyle: 'short' })}
-                  </span>
+                  <dt className="text-muted">Service Window</dt>
+                  <dd className="mt-0.5 font-mono font-semibold tabular-nums text-ink">
+                    {formatDateTime(camp.starts_at)} – {formatTimeOnly(camp.ends_at)}
+                  </dd>
                 </div>
                 <div>
-                  <span className="text-muted block">Slot Breakdown:</span>
-                  <span className="font-mono font-semibold text-ink">
+                  <dt className="text-muted">Slot Breakdown</dt>
+                  <dd className="mt-0.5 font-mono font-semibold tabular-nums text-ink">
                     {camp.slot_minutes} mins per visit ({camp.capacity_slots} slots total)
-                  </span>
+                  </dd>
                 </div>
                 <div>
-                  <span className="text-muted block">Join Deadline:</span>
-                  <span className="font-mono font-semibold text-ink">
+                  <dt className="text-muted">Join Deadline</dt>
+                  <dd className="mt-0.5 font-mono font-semibold tabular-nums text-ink">
                     {formatDateTime(camp.join_deadline)}
-                  </span>
+                  </dd>
                 </div>
                 <div>
-                  <span className="text-muted block">Confirmation Threshold:</span>
-                  <span className="font-semibold text-ink">
+                  <dt className="text-muted">Confirmation Threshold</dt>
+                  <dd className="mt-0.5 font-semibold">
                     {activeCount >= camp.min_participants ? (
-                      <span className="text-emerald-700 font-bold">
-                        ✓ Met ({activeCount} ≥ {camp.min_participants} homes)
+                      <span className="text-success">
+                        Met ({activeCount} ≥ {camp.min_participants} homes)
                       </span>
                     ) : (
-                      <span className="text-amber-700 font-bold">
+                      <span className="text-warning">
                         Needs {camp.min_participants - activeCount} more homes to confirm
                       </span>
                     )}
-                  </span>
+                  </dd>
                 </div>
-              </div>
+              </dl>
             </div>
 
             {/* Society Context Card */}
-            <div className="rounded-xl border border-border/30 bg-surface p-6 shadow-sm">
-              <div className="flex items-center gap-2 border-b border-border/20 pb-3">
+            <div className="rounded-md border border-border bg-surface p-6 shadow-card">
+              <div className="flex items-center gap-2 border-b border-border pb-3">
                 <BuildingIcon className="h-4 w-4 text-accent" />
-                <h3 className="text-sm font-bold text-ink">Society & Community Details</h3>
+                <h2 className="font-display text-base font-bold text-ink">
+                  Society & Community Details
+                </h2>
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 text-xs">
+              <dl className="mt-4 grid gap-4 text-xs sm:grid-cols-2">
                 <div>
-                  <span className="text-muted block">Society Name:</span>
-                  <span className="font-bold text-ink">{camp.society.name}</span>
+                  <dt className="text-muted">Society Name</dt>
+                  <dd className="mt-0.5 text-sm font-semibold text-ink">{camp.society.name}</dd>
                 </div>
                 <div>
-                  <span className="text-muted block">City:</span>
-                  <span className="font-bold text-ink">{camp.society.city}</span>
+                  <dt className="text-muted">City</dt>
+                  <dd className="mt-0.5 text-sm font-semibold text-ink">{camp.society.city}</dd>
                 </div>
                 <div className="sm:col-span-2">
-                  <span className="text-muted block">Address:</span>
-                  <span className="text-body">{camp.society.address}</span>
+                  <dt className="text-muted">Address</dt>
+                  <dd className="mt-0.5 text-sm text-body">{camp.society.address}</dd>
                 </div>
-              </div>
+              </dl>
             </div>
           </div>
 
-          {/* Right Column: Vendor & Operational Actions (4 cols) */}
           <div className="space-y-6 lg:col-span-4">
-            {/* Assigned Partner Vendor Card */}
-            <div className="rounded-xl border border-border/30 bg-surface p-5 shadow-sm space-y-3">
-              <div className="flex items-center justify-between border-b border-border/20 pb-3">
+            {/* Assigned Partner Vendor */}
+            <div className="space-y-3 rounded-md border border-border bg-surface p-5 shadow-card">
+              <div className="flex items-center justify-between border-b border-border pb-3">
                 <div className="flex items-center gap-2">
                   <VendorIcon className="h-4 w-4 text-accent" />
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-ink">
+                  <h3 className="font-display text-xs font-bold uppercase tracking-wider text-ink">
                     Partner Vendor
                   </h3>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowVendorModal(true)}
-                  className="text-xs font-semibold text-accent hover:underline"
+                  className="text-xs font-semibold text-accent hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-sm"
                 >
                   Change
                 </button>
               </div>
 
               {camp.vendor ? (
-                <div className="rounded-lg border border-teal-200 bg-teal-50/60 p-3 text-xs">
-                  <span className="text-[11px] font-semibold text-teal-800">Assigned Partner</span>
-                  <p className="mt-0.5 font-bold text-ink text-sm">{camp.vendor.full_name}</p>
-                  <p className="font-mono text-muted text-[11px]">{camp.vendor.phone}</p>
+                <div className="rounded-sm border border-teal-200 bg-accent-soft p-3.5 text-xs">
+                  <span className="font-semibold text-accent-pressed">Assigned Partner</span>
+                  <p className="mt-1 text-sm font-bold text-ink">{camp.vendor.full_name}</p>
+                  <p className="mt-0.5 font-mono text-xs text-body">{camp.vendor.phone}</p>
                 </div>
               ) : (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                  <p className="font-bold">No Vendor Assigned</p>
-                  <p className="mt-0.5 text-[11px]">
-                    Camp cannot be confirmed until an active technician partner is assigned.
+                <div className="rounded-sm border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900">
+                  <p className="font-semibold">No Vendor Assigned</p>
+                  <p className="mt-1 leading-relaxed">
+                    Camp cannot confirm until an active technician partner is assigned.
                   </p>
                   <button
                     type="button"
                     onClick={() => setShowVendorModal(true)}
-                    className="mt-2.5 rounded-lg bg-amber-800 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-900"
+                    className="mt-3 rounded-sm bg-amber-800 px-3 py-1.5 text-xs font-semibold text-on-accent transition-colors hover:bg-amber-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
                   >
                     Assign Vendor Now
                   </button>
@@ -608,41 +675,48 @@ export function CampDetailPage() {
               )}
             </div>
 
-            {/* Lifecycle Controls (Phase 4d integration) */}
-            <div className="rounded-xl border border-border/30 bg-surface p-5 shadow-sm space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-muted">
+            {/* Lifecycle Controls */}
+            <div className="space-y-3 rounded-md border border-border bg-surface p-5 shadow-card">
+              <h3 className="font-display text-xs font-bold uppercase tracking-wider text-muted">
                 Camp Transitions
               </h3>
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  disabled
-                  className="w-full rounded-lg border border-border/40 bg-canvas py-2 text-xs font-semibold text-muted opacity-60 cursor-not-allowed"
-                >
-                  Confirm Camp & Lock Price
-                </button>
-                <p className="text-[10px] text-muted text-center leading-tight">
-                  Scheduled for Phase 4d (validates min headcount + assigned vendor)
-                </p>
+              <button
+                type="button"
+                disabled
+                className="w-full cursor-not-allowed rounded-sm border border-border bg-canvas py-2 text-xs font-semibold text-muted opacity-70"
+              >
+                Confirm Camp & Lock Price
+              </button>
+              <div className="flex items-start gap-2 text-xs text-muted">
+                <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Scheduled for Phase 4d (validates minimum headcount and assigned vendor).
+                </span>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* TAB CONTENT 3: Group Volume Discount Tiers */}
+      {/* TAB 3: Group Volume Discount Tiers */}
       {activeTab === 'tiers' && (
-        <div className="rounded-xl border border-border/30 bg-surface shadow-sm overflow-hidden">
-          <div className="border-b border-border/20 px-6 py-4">
-            <h2 className="text-sm font-bold text-ink">Volume Discount Pricing Schedule</h2>
-            <p className="text-xs text-muted">
-              Base Price: <strong className="font-mono text-ink">{formatPaise(camp.base_price_paise)}</strong> per home
+        <div className="overflow-hidden rounded-md border border-border bg-surface shadow-card">
+          <div className="border-b border-border px-5 py-4">
+            <h2 className="font-display text-base font-bold text-ink">
+              Volume Discount Pricing Schedule
+            </h2>
+            <p className="mt-0.5 text-xs text-muted">
+              Base Price:{' '}
+              <strong className="font-mono tabular-nums text-ink">
+                {formatPaiseToRupees(camp.base_price_paise)}
+              </strong>{' '}
+              per home
             </p>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-border/30 bg-canvas/70 text-[11px] font-bold uppercase tracking-wider text-muted">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-border bg-surface-subtle text-xs font-semibold uppercase tracking-wider text-muted">
                 <tr>
                   <th scope="col" className="px-5 py-3">
                     Tier Milestone
@@ -653,51 +727,54 @@ export function CampDetailPage() {
                   <th scope="col" className="px-5 py-3">
                     Discount %
                   </th>
-                  <th scope="col" className="px-5 py-3">
+                  <th scope="col" className="px-5 py-3 text-right">
                     Effective Price
                   </th>
-                  <th scope="col" className="px-5 py-3">
-                    Savings per Home
+                  <th scope="col" className="px-5 py-3 text-right">
+                    Savings / Home
                   </th>
                   <th scope="col" className="px-5 py-3">
                     Status
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border/20 text-body">
+              <tbody className="divide-y divide-border text-body">
                 {camp.price_tiers.map((tier, idx) => {
                   const isActiveTier =
                     camp.pricing_quote.discount_pct === tier.discount_pct &&
                     camp.pricing_quote.headcount >= tier.min_participants
                   const isUnlocked = camp.pricing_quote.headcount >= tier.min_participants
-                  const pricePaise = Math.round(
-                    camp.base_price_paise * ((100 - tier.discount_pct) / 100),
+                  const pricePaise = calculateDiscountedPricePaise(
+                    camp.base_price_paise,
+                    tier.discount_pct,
                   )
                   const savingsPaise = camp.base_price_paise - pricePaise
 
                   return (
                     <tr
                       key={idx}
-                      className={isActiveTier ? 'bg-teal-50/70 font-semibold' : ''}
+                      className={isActiveTier ? 'bg-accent-soft font-semibold' : 'hover:bg-canvas'}
                     >
-                      <td className="px-5 py-3.5">Tier {idx + 1}</td>
-                      <td className="px-5 py-3.5 font-mono">{tier.min_participants}+ homes</td>
-                      <td className="px-5 py-3.5 font-mono font-bold text-accent">
+                      <td className="px-5 py-3.5 text-ink">Tier {idx + 1}</td>
+                      <td className="px-5 py-3.5 font-mono text-xs tabular-nums">
+                        {tier.min_participants}+ homes
+                      </td>
+                      <td className="px-5 py-3.5 font-mono text-xs font-semibold tabular-nums text-accent">
                         {tier.discount_pct}% off
                       </td>
-                      <td className="px-5 py-3.5 font-mono font-bold text-ink">
-                        {formatPaise(pricePaise)}
+                      <td className="px-5 py-3.5 text-right font-mono font-semibold tabular-nums text-ink">
+                        {formatPaiseToRupees(pricePaise)}
                       </td>
-                      <td className="px-5 py-3.5 font-mono text-muted">
-                        {formatPaise(savingsPaise)}
+                      <td className="px-5 py-3.5 text-right font-mono text-xs tabular-nums text-muted">
+                        {formatPaiseToRupees(savingsPaise)}
                       </td>
-                      <td className="px-5 py-3.5">
+                      <td className="px-5 py-3.5 text-xs">
                         {isActiveTier ? (
-                          <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-white">
+                          <span className="rounded-sm bg-accent px-2 py-0.5 font-semibold text-on-accent">
                             Current Active Tier
                           </span>
                         ) : isUnlocked ? (
-                          <span className="text-emerald-700 font-semibold">✓ Unlocked</span>
+                          <span className="font-semibold text-success">Unlocked</span>
                         ) : (
                           <span className="text-muted">
                             Needs {tier.min_participants - camp.pricing_quote.headcount} more
@@ -715,33 +792,53 @@ export function CampDetailPage() {
 
       {/* Vendor Assignment Modal */}
       {showVendorModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="vendor-modal-title"
+        >
           <div
-            className="fixed inset-0 bg-ink/60 backdrop-blur-sm transition-opacity"
-            onClick={() => setShowVendorModal(false)}
+            className="fixed inset-0 bg-ink/50 backdrop-blur-sm transition-opacity"
+            onClick={() => {
+              if (!assigningVendor) setShowVendorModal(false)
+            }}
             aria-hidden="true"
           />
-          <div className="relative w-full max-w-md rounded-2xl border border-border/40 bg-surface p-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border/20 pb-3">
-              <h3 className="text-sm font-bold text-ink">Assign Partner Vendor</h3>
+          <div className="relative w-full max-w-md rounded-md border border-border bg-surface p-6 shadow-modal">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <h3 id="vendor-modal-title" className="font-display text-base font-bold text-ink">
+                Assign Partner Vendor
+              </h3>
               <button
                 type="button"
                 onClick={() => setShowVendorModal(false)}
-                className="rounded p-1 text-muted hover:text-ink"
+                disabled={assigningVendor}
+                aria-label="Close vendor dialog"
+                className="rounded-sm p-1 text-muted transition-colors hover:bg-surface-subtle hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <XIcon className="h-4 w-4" />
               </button>
             </div>
 
             <form onSubmit={handleAssignVendor} className="mt-4 space-y-4">
+              <div className="rounded-sm border border-border bg-canvas p-3 text-xs text-body">
+                {activeCount} registered home{activeCount === 1 ? '' : 's'} across{' '}
+                {camp.slot_minutes}-minute slots will be served by the selected partner.
+              </div>
+
               <div>
-                <label className="block text-xs font-semibold text-body mb-1">
+                <label
+                  htmlFor="assign-vendor-select"
+                  className="mb-1.5 block text-sm font-semibold text-ink"
+                >
                   Select Partner Vendor
                 </label>
                 <select
+                  id="assign-vendor-select"
                   value={selectedVendorId}
                   onChange={(e) => setSelectedVendorId(e.target.value)}
-                  className="w-full rounded-lg border border-border/40 bg-canvas px-3 py-2 text-xs font-medium text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  className="w-full rounded-sm border border-border-strong bg-surface px-3 py-2 text-sm font-medium text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
                 >
                   <option value="">Leave unassigned</option>
                   {vendors.map((v) => (
@@ -750,24 +847,24 @@ export function CampDetailPage() {
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-[11px] text-muted">
+                <p className="mt-1.5 text-xs text-muted">
                   The assigned vendor is responsible for completing all visits during the window.
                 </p>
               </div>
 
-              <div className="flex items-center justify-end gap-2 border-t border-border/20 pt-4">
+              <div className="flex items-center justify-end gap-2.5 border-t border-border pt-4">
                 <button
                   type="button"
                   onClick={() => setShowVendorModal(false)}
                   disabled={assigningVendor}
-                  className="rounded-lg border border-border/40 bg-surface px-3 py-1.5 text-xs font-semibold text-body hover:bg-canvas"
+                  className="rounded-sm border border-border-strong bg-surface px-3.5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={assigningVendor}
-                  className="rounded-lg bg-accent px-4 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-accent-pressed disabled:opacity-50 active:scale-[0.98]"
+                  className="rounded-sm bg-accent px-4 py-2 text-sm font-semibold text-on-accent shadow-card transition-colors hover:bg-accent-pressed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   {assigningVendor ? 'Updating...' : 'Save Assignment'}
                 </button>

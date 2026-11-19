@@ -1,1 +1,0 @@
-"""Domora backend application."""
