@@ -1,16 +1,25 @@
 import { useState } from 'react'
 import { useAuth } from '../auth/useAuth'
 import { AuthShell } from '../components/AuthShell'
+import { BuildingIcon, UsersIcon } from '../components/icons/Icons'
+import { PrimaryButton } from '../components/PrimaryButton'
+import { useDocumentTitle } from '../utils/format'
 
 const roleLabels = {
   resident: 'Resident',
-  vendor: 'Vendor',
-  ops: 'Society operations',
+  vendor: 'Partner Vendor',
+  ops: 'Society Operations',
 } as const
 
 export function RoleHomePage() {
   const { auth, signOut } = useAuth()
   const [loggingOut, setLoggingOut] = useState(false)
+
+  const roleTitle =
+    auth.status === 'authenticated'
+      ? `${roleLabels[auth.user.role]} | Domora`
+      : 'Account | Domora'
+  useDocumentTitle(roleTitle)
 
   if (auth.status !== 'authenticated') {
     return null
@@ -29,39 +38,57 @@ export function RoleHomePage() {
 
   return (
     <AuthShell>
-      <div className="grid gap-7">
-        <header className="grid gap-2">
-          <p className="text-base font-medium text-accent">
+      <div className="grid gap-6">
+        <header className="grid gap-1.5">
+          <p className="font-mono text-xs font-semibold uppercase tracking-wider text-accent">
             {roleLabels[user.role]}
           </p>
-          <h1 className="text-3xl font-bold tracking-tight text-ink">
+          <h1 className="font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">
             Hi, {user.full_name}
           </h1>
-          {user.society ? (
-            <p className="text-base text-body">
-              {user.society.name} ({user.society.city})
-            </p>
-          ) : (
-            <p className="text-base text-body">
-              {user.role === 'vendor'
-                ? 'Domora Partner Network'
-                : 'Platform Operations'}
-            </p>
-          )}
-          {user.unit_label ? (
-            <p className="text-base text-muted">Unit: {user.unit_label}</p>
-          ) : null}
+          <p className="text-sm text-body">
+            Your account is active and verified for Domora society services.
+          </p>
         </header>
-        <button
-          className="min-h-control w-full rounded-sm border border-border bg-surface px-5 text-base font-medium text-ink transition-colors duration-base ease-standard hover:bg-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={loggingOut}
+
+        <dl className="grid gap-3 rounded-md border border-border bg-canvas p-4 text-sm">
+          <div className="flex items-start gap-3">
+            <BuildingIcon className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+            <div className="min-w-0">
+              <dt className="text-xs font-medium text-muted">
+                {user.society ? 'Residential Society' : 'Workspace'}
+              </dt>
+              <dd className="font-semibold text-ink">
+                {user.society
+                  ? `${user.society.name} (${user.society.city})`
+                  : user.role === 'vendor'
+                    ? 'Domora Partner Network'
+                    : 'Platform Operations'}
+              </dd>
+            </div>
+          </div>
+
+          {user.unit_label ? (
+            <div className="flex items-start gap-3 border-t border-border pt-3">
+              <UsersIcon className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+              <div className="min-w-0">
+                <dt className="text-xs font-medium text-muted">Flat or Unit</dt>
+                <dd className="font-mono font-semibold text-ink">{user.unit_label}</dd>
+              </div>
+            </div>
+          ) : null}
+        </dl>
+
+        <PrimaryButton
           onClick={() => void handleLogout()}
+          pending={loggingOut}
+          pendingLabel="Logging out..."
           type="button"
+          variant="secondary"
         >
-          {loggingOut ? 'Logging out...' : 'Log out'}
-        </button>
+          Log out
+        </PrimaryButton>
       </div>
     </AuthShell>
   )
 }
-

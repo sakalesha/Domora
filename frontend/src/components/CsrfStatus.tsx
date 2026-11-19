@@ -9,8 +9,11 @@ export function CsrfStatus() {
 
   if (csrf.status === 'loading') {
     return (
-      <p className="flex items-center gap-3 text-base text-body" role="status">
-        <span aria-hidden="true" className="spinner !border-border !border-t-accent" />
+      <p className="flex items-center gap-3 text-sm font-medium text-body" role="status">
+        <span
+          aria-hidden="true"
+          className="spinner !border-border !border-t-accent"
+        />
         Preparing a secure form...
       </p>
     )
@@ -19,12 +22,12 @@ export function CsrfStatus() {
   return (
     <div
       aria-live="polite"
-      className="grid gap-3 rounded-sm border border-error bg-canvas p-4 text-base text-error"
+      className="grid gap-3 rounded-sm border border-error/40 bg-red-50 p-4 text-sm font-medium text-error"
       role="alert"
     >
       <p>{csrf.message}</p>
       <button
-        className="min-h-control justify-self-start rounded-sm border border-border bg-surface px-4 text-base font-medium text-ink transition-colors duration-base hover:bg-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+        className="min-h-control justify-self-start rounded-sm border border-border-strong bg-surface px-4 text-sm font-semibold text-ink transition-colors duration-base hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         onClick={() => void refreshCsrf()}
         type="button"
       >

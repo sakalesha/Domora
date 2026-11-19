@@ -79,19 +79,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return
       }
 
-      let csrfToken: string | null = null
-      if (csrfResult.status === 'fulfilled') {
-        csrfToken = csrfResult.value
-        setCsrf({ status: 'ready', token: csrfToken, message: null })
-      } else {
-        setCsrf({
-          status: 'error',
-          token: null,
-          message: csrfErrorMessage(csrfResult.reason),
-        })
-      }
-
       if (profileResult.status === 'fulfilled') {
+        if (csrfResult.status === 'fulfilled') {
+          setCsrf({ status: 'ready', token: csrfResult.value, message: null })
+        } else {
+          setCsrf({
+            status: 'error',
+            token: null,
+            message: csrfErrorMessage(csrfResult.reason),
+          })
+        }
         setAuth({ status: 'authenticated', user: profileResult.value })
         return
       }
@@ -101,16 +98,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setNotice('We could not restore your session. Please sign in again.')
       }
 
+      let csrfToken: string | null =
+        csrfResult.status === 'fulfilled' ? csrfResult.value : null
+
       if (csrfToken === null) {
         try {
           csrfToken = await getCsrfToken()
         } catch (error: unknown) {
-          setCsrf({
-            status: 'error',
-            token: null,
-            message: csrfErrorMessage(error),
-          })
+          if (active) {
+            setCsrf({
+              status: 'error',
+              token: null,
+              message: csrfErrorMessage(error),
+            })
+          }
         }
+      }
+
+      if (!active) {
+        return
       }
 
       let cleanupFailed = false
