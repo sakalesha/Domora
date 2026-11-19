@@ -192,7 +192,20 @@ Sub-phases:
     - Camp Discovery List: Cards showing service, dates, status pill, spots left progress bar, provisional group-buying discount, current provisional price, and next-tier countdown ("X more neighbours needed for Y% off").
     - Camp Detail & Pricing Ladder: Interactive view displaying the stepped group pricing tiers with current tier highlighted, remaining capacity, countdown to join deadline, provisional price disclaimer ("Current provisional price • Locks at confirmation" per Decision D13), and booking summary placeholder (ready for Join/Leave in 4c).
     - Residential Privacy Safeguards (Decision D14): Displays aggregate participant numbers only, never leaking neighbor names, units, or phone numbers.
-- **[ ] 4c Join and leave:** rules 1, 2, 3 and 9 from the design (one active booking, capacity, society isolation, deadline); leave is allowed up to 24 hours before the window; ops may cancel any time.
+- **[x] 4c Join and leave:** rules 1, 2, 3 and 9 from the design (one active booking, capacity, society isolation, deadline); leave is allowed up to 24 hours before the window; ops may cancel any time. Complete:
+  - **Backend Implementation:**
+    - Schemas (`backend/app/schemas/booking.py` & `backend/app/schemas/__init__.py`): Pydantic v2 models with `extra="forbid"` (`ResidentCampSummaryForBooking`, `ResidentBookingDetail`, `ResidentBookingItem`, `ResidentBookingLeaveResponse`).
+    - Domain Service (`backend/app/services/camp_resident.py`):
+      - Exception taxonomy: `ResidentCampNotFoundError` (404), `CampClosedError` (422), `JoinDeadlinePassedError` (422), `CampOvercapacityError` (409), `DuplicateBookingError` (409), `BookingNotFoundError` (404), `LateCancellationError` (422), `ResidentSocietyRequiredError` (400).
+      - `join_camp`: Enforces Rule 1 (one active booking per camp; re-joining after cancellation permitted), Rule 2 (active bookings never exceed `camp.max_participants` guaranteed under concurrent execution via database row locking + in-process camp serialization), Rule 3 (society isolation; cross-society returns 404), Rule 9 (join deadline cutoff; 422 when past deadline), camp status check (`open` only; 422 otherwise), and integer paise provisional price calculation via Phase 3 pricing engine.
+      - `leave_camp`: Enforces 24-hour cutoff rule (cancellation only permitted if `now < camp.starts_at - 24 hours`; fewer than 24h returns 422).
+      - `list_resident_bookings` and `get_resident_booking`: Lists all bookings for the resident in reverse chronological order (active bookings first), and retrieves detailed booking with camp context.
+    - API Endpoints (`backend/app/api/v1/resident.py` & `backend/app/api/router.py`):
+      - `POST /api/v1/resident/camps/{camp_id}/join` (and `/resident/camps/{camp_id}/join`) [201 Created]
+      - `POST /api/v1/resident/camps/{camp_id}/leave` (and `/resident/camps/{camp_id}/leave`) [200 OK]
+      - `GET /api/v1/resident/bookings` (and `/resident/bookings`) [200 OK]
+      - `GET /api/v1/resident/bookings/{booking_id}` (and `/resident/bookings/{booking_id}`) [200 OK]
+    - Tests & Concurrency Verification (`backend/tests/test_resident_bookings.py`): 16 comprehensive unit, integration, and concurrency tests covering all error codes, deadline enforcement, 24h cancellation boundary, re-joining after cancellation, and simultaneous 5-resident race for the last spot (`test_concurrency_last_spot_race`: exactly 1 succeeds [201], 4 rejected with conflict [409]). 167 total backend tests passing.
 - **[ ] 4d Confirm and cancel camp:** confirm needs enough participants and a vendor; it computes the final price once, applies it to everyone, assigns consecutive time slots in join order, and moves bookings to "scheduled"; cancel needs a reason and cancels all active bookings.
 - **[ ] 4e Derived transitions:** when every participant cancels a confirmed camp, the camp is cancelled; when every booking is completed, the camp is completed.
 
@@ -369,7 +382,7 @@ Pending (decide at the phase shown):
 | 1 Data model | Complete | 2026-11-15 | 2026-11-15 | Yes | Postgres migration round-trip, constraints, RLS, and public API verified; digital ERD used instead of paper exercise. |
 | 2 Auth and roles | Complete | 2026-11-16 | 2026-11-16 | Yes | Full-stack auth complete (FastAPI backend + Vite React frontend). 50 backend tests pass; frontend lint and build pass. Welcome, Login, Signup, role routing, HttpOnly cookies + CSRF tokens, and Vercel Services deployment configured. |
 | 3 Pricing and camp rules | Complete | 2026-11-17 | 2026-11-17 | Yes | Pure domain functions for pricing and camp rules implemented using TDD. Integer paise arithmetic with ROUND_HALF_UP. 63 dedicated tests passing (113 backend tests total). Demo numbers verified (3: Rs 720, 6: Rs 680, 10: Rs 640). |
-| 4 Camp lifecycle and bookings | In progress (4a & 4b full-stack complete) | 2026-11-17 | | Yes | Sub-phases 4a (Ops camp management) and 4b (Resident camp views) complete full-stack. Society isolation, provisional pricing, next-tier deltas, privacy safeguards, and cross-origin auth verified. 151 total backend tests passing. |
+| 4 Camp lifecycle and bookings | In progress (4a, 4b, 4c complete) | 2026-11-17 | | Yes | Sub-phases 4a (Ops camp management), 4b (Resident camp views), and 4c (Resident join & leave bookings) complete. Society isolation, provisional pricing, 24h leave cutoff, and concurrency verified under simultaneous last-spot race. 167 total backend tests passing. |
 | 5 Vendor flow and photos | Not started | | | | |
 | 6 Frontend | Not started | | | | |
 | 7 Seed, deploy, document | Not started | | | | |

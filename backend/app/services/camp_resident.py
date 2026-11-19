@@ -1,10 +1,18 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from sqlalchemy import select
+import threading
+import uuid
+from datetime import datetime, timedelta, timezone
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.domain import Booking, Camp, CampPriceTier, User
+from app.schemas.booking import (
+    ResidentBookingDetail,
+    ResidentBookingItem,
+    ResidentBookingLeaveResponse,
+    ResidentCampSummaryForBooking,
+)
 from app.schemas.resident import (
     ResidentBookingSummary,
     ResidentCampDetail,
@@ -32,6 +40,42 @@ class ResidentCampNotFoundError(ResidentCampError):
 
 class ResidentSocietyRequiredError(ResidentCampError):
     """Raised when a resident user has no society associated with their account."""
+
+
+class CampClosedError(ResidentCampError):
+    """Raised when attempting to join a camp that is not open for bookings."""
+
+
+class JoinDeadlinePassedError(ResidentCampError):
+    """Raised when the join deadline for a camp has passed."""
+
+
+class CampOvercapacityError(ResidentCampError):
+    """Raised when a camp has reached maximum participant capacity."""
+
+
+class DuplicateBookingError(ResidentCampError):
+    """Raised when a resident already has an active booking in the camp."""
+
+
+class BookingNotFoundError(ResidentCampError):
+    """Raised when an active booking for a camp is not found."""
+
+
+class LateCancellationError(ResidentCampError):
+    """Raised when resident attempts to leave fewer than 24h before window start."""
+
+
+_camp_locks: dict[str, threading.Lock] = {}
+_camp_locks_guard = threading.Lock()
+
+
+def _get_camp_lock(camp_id: str) -> threading.Lock:
+    """Retrieve or create an in-process serialization lock for a specific camp."""
+    with _camp_locks_guard:
+        if camp_id not in _camp_locks:
+            _camp_locks[camp_id] = threading.Lock()
+        return _camp_locks[camp_id]
 
 
 def _to_utc(dt: datetime) -> datetime:
@@ -235,3 +279,288 @@ def get_resident_camp_detail(
         raise ResidentCampNotFoundError(f"Camp '{camp_id}' not found")
 
     return _build_resident_camp_detail(camp, resident.id, now)
+
+
+def join_camp(
+    session: Session,
+    resident: User,
+    camp_id: str,
+    *,
+    now: datetime | None = None,
+) -> ResidentBookingDetail:
+    """
+    Join an open camp in the resident's society.
+
+    Uses row-level locking (with_for_update) on the Camp row within the transaction
+    combined with in-process camp serialization to guarantee that active bookings never
+    exceed max_participants under concurrent requests (Rule 2).
+
+    Enforces:
+    - Rule 3: Strict society isolation (ResidentCampNotFoundError -> 404).
+    - Camp status must be 'open' (CampClosedError -> 422).
+    - Rule 9: now < join_deadline (JoinDeadlinePassedError -> 422).
+    - Rule 1: No duplicate active booking (DuplicateBookingError -> 409).
+      Re-joining is permitted if a previous booking was cancelled.
+    - Capacity check: active_count < max_participants (CampOvercapacityError -> 409).
+    - Quoted price: calculated using Phase 3 pricing engine for new headcount (count + 1).
+    """
+    if not resident.society_id:
+        raise ResidentSocietyRequiredError("Resident must belong to a society to join camps")
+
+    current_time = _to_utc(now or datetime.now(timezone.utc))
+
+    with _get_camp_lock(camp_id):
+        # Lock the camp row to serialize concurrent joins against this camp
+        camp = session.scalar(
+            select(Camp)
+            .options(
+                joinedload(Camp.service),
+                joinedload(Camp.society),
+                selectinload(Camp.price_tiers),
+            )
+            .where(Camp.id == camp_id)
+            .with_for_update()
+        )
+
+        if camp is None or camp.society_id != resident.society_id:
+            raise ResidentCampNotFoundError("Camp not found")
+
+        if camp.status != "open":
+            raise CampClosedError(f"Cannot join camp with status '{camp.status}'")
+
+        if current_time >= _to_utc(camp.join_deadline):
+            raise JoinDeadlinePassedError("Join deadline has passed for this camp")
+
+        # Check for existing active booking for this resident (Rule 1)
+        existing_active = session.scalar(
+            select(Booking)
+            .where(
+                Booking.camp_id == camp_id,
+                Booking.resident_id == resident.id,
+                Booking.status != "cancelled",
+            )
+        )
+        if existing_active is not None:
+            raise DuplicateBookingError("You already have an active booking in this camp")
+
+        # Count current active bookings under the lock (Rule 2)
+        active_count = session.scalar(
+            select(func.count(Booking.id))
+            .where(
+                Booking.camp_id == camp_id,
+                Booking.status != "cancelled",
+            )
+        ) or 0
+
+        if active_count >= camp.max_participants:
+            raise CampOvercapacityError("Camp has reached maximum participant capacity")
+
+        # Calculate provisional quote for new headcount (active_count + 1)
+        new_headcount = active_count + 1
+        sorted_tiers = sorted(camp.price_tiers, key=lambda t: t.min_participants)
+        domain_tiers = [
+            PriceTier(min_participants=t.min_participants, discount_pct=t.discount_pct)
+            for t in sorted_tiers
+        ]
+        quote = calculate_pricing_quote(camp.base_price_paise, new_headcount, domain_tiers)
+
+        booking = Booking(
+            id=str(uuid.uuid4()),
+            camp_id=camp.id,
+            resident_id=resident.id,
+            status="joined",
+            quoted_price_paise=quote.final_price_paise,
+            final_price_paise=None,
+            slot_starts_at=None,
+            created_at=current_time,
+            cancelled_at=None,
+        )
+        session.add(booking)
+        session.commit()
+
+        camp_summary = ResidentCampSummaryForBooking(
+            id=camp.id,
+            title=camp.title,
+            service_name=camp.service.name,
+            status=camp.status,
+            starts_at=camp.starts_at,
+            ends_at=camp.ends_at,
+            base_price_paise=camp.base_price_paise,
+            base_price_rupees=_paise_to_rupees(camp.base_price_paise),
+            current_provisional_price_paise=quote.final_price_paise,
+            current_provisional_price_rupees=_paise_to_rupees(quote.final_price_paise),
+            current_discount_pct=quote.discount_pct,
+            active_participants=new_headcount,
+            spots_remaining=max(0, camp.max_participants - new_headcount),
+        )
+
+        return ResidentBookingDetail(
+            id=booking.id,
+            camp_id=booking.camp_id,
+            resident_id=booking.resident_id,
+            status=booking.status,
+            quoted_price_paise=booking.quoted_price_paise,
+            quoted_price_rupees=_paise_to_rupees(booking.quoted_price_paise),
+            final_price_paise=booking.final_price_paise,
+            final_price_rupees=_paise_to_rupees(booking.final_price_paise) if booking.final_price_paise is not None else None,
+            slot_starts_at=booking.slot_starts_at,
+            created_at=booking.created_at,
+            cancelled_at=booking.cancelled_at,
+            camp=camp_summary,
+        )
+
+
+def leave_camp(
+    session: Session,
+    resident: User,
+    camp_id: str,
+    *,
+    now: datetime | None = None,
+) -> ResidentBookingLeaveResponse:
+    """
+    Leave (cancel) the resident's active booking in a camp.
+
+    Enforces the 24-hour cutoff rule:
+    Cancellation is allowed only if now < camp.starts_at - 24 hours.
+    Fewer than 24h prior to window start raises LateCancellationError (422).
+    """
+    current_time = _to_utc(now or datetime.now(timezone.utc))
+
+    with _get_camp_lock(camp_id):
+        booking = session.scalar(
+            select(Booking)
+            .options(joinedload(Booking.camp))
+            .where(
+                Booking.camp_id == camp_id,
+                Booking.resident_id == resident.id,
+                Booking.status != "cancelled",
+            )
+            .with_for_update()
+        )
+
+        if booking is None:
+            raise BookingNotFoundError("No active booking found for this camp")
+
+        # Enforce 24h cancellation lead time
+        cutoff = _to_utc(booking.camp.starts_at) - timedelta(hours=24)
+        if current_time >= cutoff:
+            raise LateCancellationError(
+                "Bookings cannot be cancelled within 24 hours of the service window start"
+            )
+
+        booking.status = "cancelled"
+        booking.cancelled_at = current_time
+        session.commit()
+
+        return ResidentBookingLeaveResponse(
+            id=booking.id,
+            camp_id=booking.camp_id,
+            status=booking.status,
+            cancelled_at=booking.cancelled_at,
+        )
+
+
+def list_resident_bookings(
+    session: Session,
+    resident: User,
+) -> list[ResidentBookingItem]:
+    """
+    List all bookings for the resident (active and historical) in reverse chronological order.
+    """
+    stmt = (
+        select(Booking)
+        .options(
+            joinedload(Booking.camp).joinedload(Camp.service),
+        )
+        .where(Booking.resident_id == resident.id)
+        .order_by(
+            case((Booking.status != "cancelled", 0), else_=1),
+            Booking.created_at.desc(),
+        )
+    )
+    bookings = session.scalars(stmt).all()
+
+    return [
+        ResidentBookingItem(
+            id=b.id,
+            camp_id=b.camp_id,
+            status=b.status,
+            quoted_price_paise=b.quoted_price_paise,
+            quoted_price_rupees=_paise_to_rupees(b.quoted_price_paise),
+            final_price_paise=b.final_price_paise,
+            final_price_rupees=_paise_to_rupees(b.final_price_paise) if b.final_price_paise is not None else None,
+            slot_starts_at=b.slot_starts_at,
+            created_at=b.created_at,
+            cancelled_at=b.cancelled_at,
+            camp_title=b.camp.title,
+            service_name=b.camp.service.name,
+            camp_status=b.camp.status,
+            starts_at=b.camp.starts_at,
+            ends_at=b.camp.ends_at,
+        )
+        for b in bookings
+    ]
+
+
+def get_resident_booking(
+    session: Session,
+    resident: User,
+    booking_id: str,
+) -> ResidentBookingDetail:
+    """
+    Get full details of a specific booking belonging to the resident.
+    """
+    booking = session.scalar(
+        select(Booking)
+        .options(
+            joinedload(Booking.camp).joinedload(Camp.service),
+            joinedload(Booking.camp).selectinload(Camp.price_tiers),
+            joinedload(Booking.camp).selectinload(Camp.bookings),
+        )
+        .where(
+            Booking.id == booking_id,
+            Booking.resident_id == resident.id,
+        )
+    )
+    if booking is None:
+        raise BookingNotFoundError("Booking not found")
+
+    camp = booking.camp
+    active_count = sum(1 for b in camp.bookings if b.status != "cancelled")
+    sorted_tiers = sorted(camp.price_tiers, key=lambda t: t.min_participants)
+    domain_tiers = [
+        PriceTier(min_participants=t.min_participants, discount_pct=t.discount_pct)
+        for t in sorted_tiers
+    ]
+    quote = calculate_pricing_quote(camp.base_price_paise, active_count, domain_tiers)
+
+    camp_summary = ResidentCampSummaryForBooking(
+        id=camp.id,
+        title=camp.title,
+        service_name=camp.service.name,
+        status=camp.status,
+        starts_at=camp.starts_at,
+        ends_at=camp.ends_at,
+        base_price_paise=camp.base_price_paise,
+        base_price_rupees=_paise_to_rupees(camp.base_price_paise),
+        current_provisional_price_paise=quote.final_price_paise,
+        current_provisional_price_rupees=_paise_to_rupees(quote.final_price_paise),
+        current_discount_pct=quote.discount_pct,
+        active_participants=active_count,
+        spots_remaining=max(0, camp.max_participants - active_count),
+    )
+
+    return ResidentBookingDetail(
+        id=booking.id,
+        camp_id=booking.camp_id,
+        resident_id=booking.resident_id,
+        status=booking.status,
+        quoted_price_paise=booking.quoted_price_paise,
+        quoted_price_rupees=_paise_to_rupees(booking.quoted_price_paise),
+        final_price_paise=booking.final_price_paise,
+        final_price_rupees=_paise_to_rupees(booking.final_price_paise) if booking.final_price_paise is not None else None,
+        slot_starts_at=booking.slot_starts_at,
+        created_at=booking.created_at,
+        cancelled_at=booking.cancelled_at,
+        camp=camp_summary,
+    )

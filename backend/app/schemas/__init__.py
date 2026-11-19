@@ -10,6 +10,12 @@ from app.schemas.auth import (
     SocietySummary,
     UserSummary,
 )
+from app.schemas.booking import (
+    ResidentBookingDetail,
+    ResidentBookingItem,
+    ResidentBookingLeaveResponse,
+    ResidentCampSummaryForBooking,
+)
 from app.schemas.ops import (
     CampAssignVendorRequest,
     CampCreateRequest,
@@ -65,9 +71,13 @@ __all__ = [
     "PriceTierInput",
     "PriceTierResponse",
     "PricingQuoteResponse",
+    "ResidentBookingDetail",
+    "ResidentBookingItem",
+    "ResidentBookingLeaveResponse",
     "ResidentBookingSummary",
     "ResidentCampDetail",
     "ResidentCampListItem",
+    "ResidentCampSummaryForBooking",
     "ResidentNextTier",
     "ResidentServiceSummary",
     "ResidentSocietySummary",
